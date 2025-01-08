@@ -5,14 +5,33 @@ from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 
 class Boussinesq:
-    def __init__(self, height=pi/40, nlayers=20, horiz_num=80, radius=2):
+    def __init__(self, height=pi/40, nlayers=20, horiz_num=80, radius=2, mesh="interval"):
+        '''
+        mesh : interval or circle to be extruded.
+        '''
         self.ar = height/(2 * pi * radius)
         self.dx = 2 * pi * radius / horiz_num
         self.dz = height / nlayers
         print(f"The aspect ratio is {self.ar}")
 
-        self.m = CircleManifoldMesh(horiz_num, radius=radius)
-        # self.m = UnitIntervalMesh(horiz_num)
         # Extruded Mesh
-        self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='radial')
-        # self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
+        if mesh == "interval":
+            self.m = UnitIntervalMesh(horiz_num, name='interval')
+            self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
+        if mesh == "circle":
+            self.m = CircleManifoldMesh(horiz_num, radius=radius, name='circle')
+            self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='radial')
+
+
+        # Mixed Finite Element Space
+        CG_1 = FiniteElement("CG", interval, 1)
+        DG_0 = FiniteElement("DG", interval, 0)
+        P1P0 = TensorProductElement(CG_1, DG_0)
+        RT_horiz = HDivElement(P1P0)
+        P0P1 = TensorProductElement(DG_0, CG_1)
+        RT_vert = HDivElement(P0P1)
+        RT_e = RT_horiz + RT_vert
+        RT = FunctionSpace(self.mesh, RT_e)
+        DG = FunctionSpace(self.mesh, 'DG', 0)
+        self.W = RT * DG
+        
