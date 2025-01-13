@@ -22,6 +22,8 @@ class Boussinesq:
             self.m = CircleManifoldMesh(horiz_num, radius=radius, name='circle')
             self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='radial')
 
+        if mesh == '3d':
+            self.m = 
         # Mixed Finite Element Space
         CG_1 = FiniteElement("CG", interval, 1)
         DG_0 = FiniteElement("DG", interval, 0)
@@ -31,20 +33,22 @@ class Boussinesq:
         RT_vert = HDivElement(P0P1)
         RT_e = RT_horiz + RT_vert
         RT = FunctionSpace(self.mesh, RT_e)
-        Wta = FunctionSpace(self.mesh, P1P0) # Buoyancy space
+        Wta = FunctionSpace(self.mesh, P0P1) # Buoyancy space
         DG = FunctionSpace(self.mesh, 'DG', 0)
         self.W = RT * DG * Wta
 
+
+        # Setting up the solution variables.
         self.sol = Function(self.W)
         self.u, self.p, self.b = split(self.sol)
-        self.v, self.phi, self.gamma = TestFunctions(self.W)
+        self.alpha, self.phi, self.gamma = TestFunctions(self.W)
 
-        self.x, self.y = SpatialCorrdinate(self.mesh)
+        self.x, self.z = SpatialCoordinate(self.mesh)
 
     def build_params(self):
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
 
     def build_NonlinearVariationalSolver(self):
-
+        
 
