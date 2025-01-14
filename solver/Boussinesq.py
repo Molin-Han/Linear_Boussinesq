@@ -70,11 +70,26 @@ class Boussinesq:
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
 
+    def build_boundary_condition(self):
+        # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
+        bc1 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "top")
+        bc2 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "bottom")
+        bc3 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "on_boundary")
+        self.bcs = [bc1, bc2, bc3]
+
     def build_NonlinearVariationalSolver(self):
         # Simplify variable name
         un, pn, bn = self.un, self.pn, self.bn
         unp1, pnp1, bnp1 = self.unp1, self.pnp1, self.bnp1
         unph, pnph, bnph = self.unph, self.pnph, self.bnph
         w, phi, q = self.w, self.phi, self.q
-        def 
+        def u_eqn(w):
+            pass
 
+        def b_eqn(q):
+            pass
+
+        def p_eqn(phi):
+            pass
+        
+        eqn = u_eqn(w) + b_eqn(q) + p_eqn(phi)
