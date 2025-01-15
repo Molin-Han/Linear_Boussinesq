@@ -52,6 +52,7 @@ class Boussinesq:
         self.pnph = 0.5*(self.pn + self.pnp1)
 
         self.n = FacetNormal(self.mesh)
+        self.k = as_vector([0, 0, 1])
 
         self.dT = dT
 
@@ -71,6 +72,7 @@ class Boussinesq:
     
     def build_ASM_params(self):
         pass
+    # TODO: need to build the mesh hierarchy and the parameters for the ASM solver.
 
     def build_boundary_condition(self):
         # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
@@ -85,14 +87,22 @@ class Boussinesq:
         unp1, pnp1, bnp1 = self.unp1, self.pnp1, self.bnp1
         unph, pnph, bnph = self.unph, self.pnph, self.bnph
         w, phi, q = self.w, self.phi, self.q
-        def u_eqn(w):
+        k = self.k
+        dT = self.dT
+        N = self.N
+        def u_eqn(w):# TODO: need to complete the velocity equation.
             pass
 
         def b_eqn(q):
-            pass
+            return (
+                q * (bnp1 - bn) * dx +
+                dT * N**2 * q * inner(k, unph) * dx
+            )
 
         def p_eqn(phi):
-            pass
+            return (
+                phi * div(unph) * dx
+            )
         
         eqn = u_eqn(w) + b_eqn(q) + p_eqn(phi)
         bcs = self.bcs
@@ -110,3 +120,7 @@ class Boussinesq:
                                                     solver_parameters=self.params,
                                                     options_prefix='linear_boussinesq_ASM'
                                                     )
+        
+
+if __name__ == "__main__":
+    pass # TODO: FIll this up with the main code.
