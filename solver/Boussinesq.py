@@ -69,6 +69,8 @@ class Boussinesq:
     def build_lu_params(self):
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
+    def build_ASM_params(self):
+        pass
 
     def build_boundary_condition(self):
         # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
@@ -93,3 +95,18 @@ class Boussinesq:
             pass
         
         eqn = u_eqn(w) + b_eqn(q) + p_eqn(phi)
+        bcs = self.bcs
+        self.nprob = NonlinearVariationalProblem(eqn, self.Unp1, bcs=bcs)
+
+        # Nullspace for the problem
+        v_basis = VectorSpaceBasis(constant=True) #pressure field nullspace
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis])
+        trans_null = VectorSpaceBasis(constant=True)
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null])
+        self.nsolver = NonlinearVariationalSolver(
+                                                    self.nprob,
+                                                    nullspace=self.nullspace,
+                                                    transpose_nullspace=self.trans_nullspace,
+                                                    solver_parameters=self.params,
+                                                    options_prefix='linear_boussinesq_ASM'
+                                                    )
