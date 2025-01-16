@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 
 class Boussinesq:
-    def __init__(self, N= 1.0e-2, U=20., dT=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
+    def __init__(self, N=1.0e-2, U=20., dT=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
 
         # Extruded Mesh 3D
         self.nx = nx
@@ -16,6 +16,8 @@ class Boussinesq:
         self.U = U # steady velocity
         self.N = N # buoyancy frequency
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='y',quadrilateral=True)
+        self.mh = MeshHierarchy(self.m, refinement_levels=0)
+        self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
         self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
 
         # Mixed Finite Element Space
@@ -71,7 +73,37 @@ class Boussinesq:
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
     def build_ASM_params(self):
-        pass
+        self.params = {
+                        'mat_type': 'matfree',
+                        'ksp_type': 'gmres',
+                        'snes_monitor': None,
+                        # 'snes_type':'ksponly',
+                        # 'ksp_monitor': None,
+                        # "ksp_monitor_true_residual": None,
+                        'pc_type': 'mg',
+                        'pc_mg_type': 'full',
+                        "ksp_converged_reason": None,
+                        "snes_converged_reason": None,
+                        'mg_levels': {
+                                'ksp_type': 'richardson',
+                                # "ksp_monitor_true_residual": None,
+                                # "ksp_view": None,
+                                "ksp_atol": 1e-50,
+                                "ksp_rtol": 1e-10,
+                                'ksp_max_it': 1,
+                                'pc_type': 'python',
+                                'pc_python_type': 'firedrake.AssembledPC',
+                                'assembled_pc_type': 'python',
+                                'assembled_pc_python_type': 'firedrake.ASMVankaPC',
+                                'assembled_pc_vanka_construct_dim': 0,
+                                'assembled_pc_vanka_sub_sub_pc_type': 'lu'
+                                #'assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type':'mumps'
+                                },
+                        'mg_coarse': {
+                                'ksp_type': 'preonly',
+                                'pc_type': 'lu'
+                                }
+                        }
     # TODO: need to build the mesh hierarchy and the parameters for the ASM solver.
 
     def build_boundary_condition(self):
@@ -120,7 +152,51 @@ class Boussinesq:
                                                     solver_parameters=self.params,
                                                     options_prefix='linear_boussinesq_ASM'
                                                     )
-        
+
+    def time_stepping(self, tmax=3600.0, dt=600.0):
+        Un = self.Un
+        Unp1 = self.Unp1
+
+        name = "lb_imp"
+        file_lb = File(name+'.pvd')
+        un, Pin, bn = Un.split()
+        file_lb.write(un, Pin, bn)
+        Unp1.assign(Un)
+
+        t = 0.0
+        dumpt = 600.
+        tdump = 0.
+        self.dT.assign(dt)
+        print('tmax=', tmax, 'dt=', dt)
+        while t < tmax - 0.5*dt:
+            print(t)
+            t += dt
+            tdump += dt
+
+            self.nsolver.solve()
+            self.Un.assign(self.Unp1)
+
+            if tdump > dumpt - dt*0.5:
+                file_lb.write(un, Pin, bn)
+                tdump -= dumpt
+
 
 if __name__ == "__main__":
-    pass # TODO: FIll this up with the main code.
+    N=1.0e-2
+    U=20.
+    dT=600.
+    nx=5e3
+    ny=1
+    Lx=1e3
+    Ly=1
+    height=1e4
+    nlayers=20
+    horiz_num=80
+    radius=2
+
+    eqn = Boussinesq(N=N, U=U, dT=dT, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
+    eqn.build_initial_data()
+    eqn.build_lu_params()
+    eqn.build_boundary_condition()
+    eqn.build_NonlinearVariationalSolver()
+    eqn.time_stepping()
