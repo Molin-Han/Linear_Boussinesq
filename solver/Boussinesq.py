@@ -15,7 +15,8 @@ class Boussinesq:
         self.height = height
         self.U = U # steady velocity
         self.N = N # buoyancy frequency
-        self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='y',quadrilateral=True)
+        self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
+        # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
         self.mh = MeshHierarchy(self.m, refinement_levels=0)
         self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
         self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
@@ -23,6 +24,7 @@ class Boussinesq:
         # Mixed Finite Element Space
         horizontal_degree = 2
         vertical_degree = 2
+        # TODO: need to check the base spaces.
         # horizontal base spaces
         S1 = FiniteElement("CG", interval, horizontal_degree) # CG2
         S2 = FiniteElement("DG", interval, horizontal_degree-1) # DG1
@@ -30,16 +32,19 @@ class Boussinesq:
         T0 = FiniteElement("CG", interval, vertical_degree) # CG2
         T1 = FiniteElement("DG", interval, vertical_degree-1) # DG1
 
-        Vh_elt = TensorProductElement(S1, T1) # CG horizontal and DG vertical
+        Vh_elt = TensorProductElement(S1, S2) # CG horizontal and DG vertical
         V_horiz = HDivElement(Vh_elt)
-        Vv_elt = TensorProductElement(S2, T0) # DG horizontal and CG vertical
+        Vv_elt = TensorProductElement(S2, S1) # DG horizontal and CG vertical
         V_vert = HDivElement(Vv_elt)
-        V_e = V_horiz + V_vert
-        V = FunctionSpace(self.mesh, V_e, name="HDiv") # Velocity space RT(k-1)
+        V_2d = V_horiz + V_vert # RT quadrilateral in 2D
+
+        # TODO: 3d element should be RT prisms i.e hexahedra.
+
+        V = FunctionSpace(self.mesh, V_3d, name="HDiv") # Velocity space RT(k-1)
         Vb = FunctionSpace(self.mesh, Vv_elt, name="Buoyancy") # Buoyancy space
         Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
-
+        
         self.W = V * Vp * Vb # velocity, pressure, buoyancy space
         self.x, self.z = SpatialCoordinate(self.mesh)
 
@@ -55,6 +60,9 @@ class Boussinesq:
 
         self.n = FacetNormal(self.mesh)
         self.k = as_vector([0, 0, 1])
+        Omega = 7.292e-5
+        theta = pi / 3
+        self.omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 
         self.dT = dT
 
@@ -104,7 +112,7 @@ class Boussinesq:
                                 'pc_type': 'lu'
                                 }
                         }
-    # TODO: need to build the mesh hierarchy and the parameters for the ASM solver.
+    # TODO: need to build the parameters for the ASM solver.
 
     def build_boundary_condition(self):
         # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
@@ -122,8 +130,13 @@ class Boussinesq:
         k = self.k
         dT = self.dT
         N = self.N
+        omega = self.omega
         def u_eqn(w):# TODO: need to complete the velocity equation.
-            pass
+            return (
+                w * (unp1 - un) * dx -
+                dT * inner(w, 2 * outer(omega, unph)) * dx -
+                dT * div(w) * pnph * dx - dT * inner(w, k) * bnph * dx
+            )
 
         def b_eqn(q):
             return (
@@ -174,6 +187,7 @@ class Boussinesq:
             tdump += dt
 
             self.nsolver.solve()
+            print("The nonlinear solver is solved.")
             self.Un.assign(self.Unp1)
 
             if tdump > dumpt - dt*0.5:
@@ -185,10 +199,10 @@ if __name__ == "__main__":
     N=1.0e-2
     U=20.
     dT=600.
-    nx=5e3
+    nx=10
     ny=1
-    Lx=1e3
-    Ly=1
+    Lx=10
+    Ly=1.0e-3
     height=1e4
     nlayers=20
     horiz_num=80
