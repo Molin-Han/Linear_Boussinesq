@@ -15,6 +15,7 @@ class Boussinesq:
         self.height = height
         self.U = U # steady velocity
         self.N = N # buoyancy frequency
+        # self.m = UnitSquareMesh(self.nx, self.ny)
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
         # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
         self.mh = MeshHierarchy(self.m, refinement_levels=0)
@@ -28,23 +29,42 @@ class Boussinesq:
         # horizontal base spaces
         S1 = FiniteElement("CG", interval, horizontal_degree) # CG2
         S2 = FiniteElement("DG", interval, horizontal_degree-1) # DG1
+
+        S1_2d = FiniteElement("CG", quadrilateral, horizontal_degree) # CG2
+        S2_2d = FiniteElement("DG", quadrilateral, horizontal_degree-1) # DG1
         # vertical base spaces
         T0 = FiniteElement("CG", interval, vertical_degree) # CG2
         T1 = FiniteElement("DG", interval, vertical_degree-1) # DG1
 
-        Vh_elt = TensorProductElement(S1, S2) # CG horizontal and DG vertical
-        V_horiz = HDivElement(Vh_elt)
-        Vv_elt = TensorProductElement(S2, S1) # DG horizontal and CG vertical
-        V_vert = HDivElement(Vv_elt)
-        V_2d = V_horiz + V_vert # RT quadrilateral in 2D
+        Vh_elt = TensorProductElement(S1, T1) # CG horizontal and DG vertical
+        V_2h = HDivElement(Vh_elt)
+        Vv_elt = TensorProductElement(S2, T0) # DG horizontal and CG vertical
+        V_2v = HDivElement(Vv_elt)
+        V_2d = V_2h + V_2v # quadrilateral RT element in 2D
 
-        # TODO: 3d element should be RT prisms i.e hexahedra.
+        Vh_elt_3d = TensorProductElement(S1_2d, T1)
+        Vh_3d = HDivElement(Vh_elt_3d)
+        Vv_elt_3d = TensorProductElement(S2_2d, T0)
+        Vv_3d = HDivElement(Vv_elt_3d)
+        V_3d = Vh_3d + Vv_3d
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+        # TODO: Checked this expression. This is correct for triangular mesh.
+        # P2i = FiniteElement("CG", interval, 2)
+        # dP1t = FiniteElement("DG", triangle, 1)
+        # dP1i = FiniteElement("DG", interval, 1)
+        # RT2 = FiniteElement("RT", triangle, 2)
+        # Hdiv_h = HDivElement(TensorProductElement(RT2, dP1i))
+        # Hdiv_v = HDivElement(TensorProductElement(dP1t, P2i))
+        # Hdiv_element = Hdiv_h + Hdiv_v
+        # V = FunctionSpace(self.mesh, Hdiv_element, name="HDiv") # Velocity space RT(k)
+        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
         V = FunctionSpace(self.mesh, V_3d, name="HDiv") # Velocity space RT(k-1)
         Vb = FunctionSpace(self.mesh, Vv_elt, name="Buoyancy") # Buoyancy space
         Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
-        
+
         self.W = V * Vp * Vb # velocity, pressure, buoyancy space
         self.x, self.z = SpatialCoordinate(self.mesh)
 
