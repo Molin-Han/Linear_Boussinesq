@@ -36,12 +36,14 @@ class Boussinesq:
         T0 = FiniteElement("CG", interval, vertical_degree) # CG2
         T1 = FiniteElement("DG", interval, vertical_degree-1) # DG1
 
+        # Successful build of the 2D element.
         Vh_elt = TensorProductElement(S1, T1) # CG horizontal and DG vertical
         V_2h = HDivElement(Vh_elt)
         Vv_elt = TensorProductElement(S2, T0) # DG horizontal and CG vertical
         V_2v = HDivElement(Vv_elt)
         V_2d = V_2h + V_2v # quadrilateral RT element in 2D
 
+        # Attempt to build the 3D element. #TODO: this has bug here.
         Vh_elt_3d = TensorProductElement(S1_2d, T1)
         Vh_3d = HDivElement(Vh_elt_3d)
         Vv_elt_3d = TensorProductElement(S2_2d, T0)
@@ -66,7 +68,7 @@ class Boussinesq:
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
 
         self.W = V * Vp * Vb # velocity, pressure, buoyancy space
-        self.x, self.z = SpatialCoordinate(self.mesh)
+        self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
         self.Un = Function(self.W)
@@ -91,10 +93,11 @@ class Boussinesq:
 
     def build_initial_data(self):
         xc = self.Lx/2
+        yc = self.Ly/2
         a = Constant(5000)
         U = Constant(self.U)
         self.un.interpolate(as_vector([U,0,0])) # TODO: need to check this.
-        self.bn.interpolate(sin(pi*self.z/self.height)/(1+(self.x-xc)**2/a**2))
+        self.bn.interpolate(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
 
     def build_lu_params(self):
@@ -153,7 +156,7 @@ class Boussinesq:
         omega = self.omega
         def u_eqn(w):# TODO: need to complete the velocity equation.
             return (
-                w * (unp1 - un) * dx -
+                w * (unp1 - un) * dx +
                 dT * inner(w, 2 * outer(omega, unph)) * dx -
                 dT * div(w) * pnph * dx - dT * inner(w, k) * bnph * dx
             )
