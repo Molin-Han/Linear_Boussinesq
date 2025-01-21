@@ -67,15 +67,19 @@ class Boussinesq:
         Vp_elt = TensorProductElement(S2_2d, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
 
-        self.W = V * Vp * Vb # velocity, pressure, buoyancy space
+        # self.W = V * Vp * Vb # velocity, pressure, buoyancy space
+        self.W = V * Vb * Vp # velocity, buoyancy, pressure space
         self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
         self.Un = Function(self.W)
         self.Unp1 = Function(self.W)
-        self.un, self.pn, self.bn = split(self.Un)
-        self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
-        self.alpha, self.phi, self.gamma = TestFunctions(self.W)
+        # self.un, self.pn, self.bn = split(self.Un)
+        self.un, self.bn, self.pn = split(self.Un)
+        # self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
+        self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)
+        # self.alpha, self.phi, self.gamma = TestFunctions(self.W)
+        self.alpha, self.gamma, self.phi = TestFunctions(self.W)
         self.unph = 0.5*(self.un + self.unp1)
         self.bnph = 0.5*(self.bn + self.bnp1)
         self.pnph = 0.5*(self.pn + self.pnp1)
@@ -203,9 +207,11 @@ class Boussinesq:
 
         # Nullspace for the problem
         v_basis = VectorSpaceBasis(constant=True) #pressure field nullspace
-        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
+        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis])
         trans_null = VectorSpaceBasis(constant=True)
-        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
+        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null])
         self.nsolver = NonlinearVariationalSolver(
                                                     self.nprob,
                                                     nullspace=self.nullspace,
@@ -252,7 +258,7 @@ if __name__ == "__main__":
     Lx=3.0e5
     Ly=1.0e-3 * Lx
     height=1e4
-    nlayers=50
+    nlayers=40
     horiz_num=80
     radius=2
     tmax = 3600.0
