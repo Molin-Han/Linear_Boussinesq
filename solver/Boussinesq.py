@@ -18,8 +18,8 @@ class Boussinesq:
         # self.m = UnitSquareMesh(self.nx, self.ny)
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
         # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
-        self.mh = MeshHierarchy(self.m, refinement_levels=0)
-        self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
+        # self.mh = MeshHierarchy(self.m, refinement_levels=0)
+        # self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
         self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
 
         # Mixed Finite Element Space
@@ -97,14 +97,15 @@ class Boussinesq:
         a = Constant(5000)
         U = Constant(self.U)
         un, pn, bn = self.Un.subfunctions
-        un.project(as_vector([U,0,0])) # TODO: need to check this.
+        un.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
+        # un.project(as_vector([U,0,0])) # TODO: need to check this.
         bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
 
     def build_lu_params(self):
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
-    def build_ASM_params(self):
+    def build_ASM_MH_params(self):
         self.params = {
                         'mat_type': 'matfree',
                         'ksp_type': 'gmres',
@@ -137,6 +138,29 @@ class Boussinesq:
                                 }
                         }
     # TODO: need to build the parameters for the ASM solver.
+
+    def build_pure_Vanka_params(self):
+        self.params = {
+            "mat_type": "matfree",
+            "ksp_type": "gmres",
+            'snes_monitor': None,
+            "ksp_converged_reason": None,
+            "snes_converged_reason": None,
+            'ksp_monitor': None,
+            # "ksp_monitor_true_residual": None,
+            # "ksp_view": None,
+            "ksp_atol": 1e-8,
+            "ksp_rtol": 1e-8,
+            "ksp_max_it": 400,
+            "pc_type": "python",
+            "pc_python_type": "firedrake.AssembledPC",
+            "assembled_pc_type": "python",
+            "assembled_pc_python_type": "firedrake.ASMVankaPC",
+            "assembled_pc_vanka_construct_dim": 0,
+            "assembled_pc_vanka_sub_sub_pc_type": "lu",
+            "assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type":'mumps'
+            }
+
 
     def build_boundary_condition(self):
         # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
@@ -223,7 +247,7 @@ if __name__ == "__main__":
     N=1.0e-2
     U=0.
     dT=600.
-    nx=100
+    nx=20
     ny=3
     Lx=3.0e5
     Ly=1.0e-3 * Lx
@@ -237,7 +261,7 @@ if __name__ == "__main__":
     eqn = Boussinesq(N=N, U=U, dT=dT, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
     eqn.build_initial_data()
     # eqn.build_lu_params()
-    eqn.build_ASM_params()
+    eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
