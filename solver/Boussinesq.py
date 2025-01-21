@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 
 class Boussinesq:
-    def __init__(self, N=1.0e-2, U=20., dT=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
+    def __init__(self, N=1.0e-2, U=0., dT=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
 
         # Extruded Mesh 3D
         self.nx = nx
@@ -30,16 +30,16 @@ class Boussinesq:
         S1 = FiniteElement("CG", interval, horizontal_degree) # CG2
         S2 = FiniteElement("DG", interval, horizontal_degree-1) # DG1
 
-        S1_2d = FiniteElement("CG", quadrilateral, horizontal_degree) # CG2
-        S2_2d = FiniteElement("DG", quadrilateral, horizontal_degree-1) # DG1
+        S1_2d = FiniteElement("RTCF", quadrilateral, horizontal_degree) # RT2
+        S2_2d = FiniteElement("DQ", quadrilateral, horizontal_degree-1) # DG1
         # vertical base spaces
         T0 = FiniteElement("CG", interval, vertical_degree) # CG2
         T1 = FiniteElement("DG", interval, vertical_degree-1) # DG1
 
         # Successful build of the 2D element.
-        Vh_elt = TensorProductElement(S1, T1) # CG horizontal and DG vertical
+        Vh_elt = TensorProductElement(S1_2d, T1) # CG horizontal and DG vertical
         V_2h = HDivElement(Vh_elt)
-        Vv_elt = TensorProductElement(S2, T0) # DG horizontal and CG vertical
+        Vv_elt = TensorProductElement(S2_2d, T0) # DG horizontal and CG vertical
         V_2v = HDivElement(Vv_elt)
         V_2d = V_2h + V_2v # quadrilateral RT element in 2D
 
@@ -64,7 +64,7 @@ class Boussinesq:
 
         V = FunctionSpace(self.mesh, V_3d, name="HDiv") # Velocity space RT(k-1)
         Vb = FunctionSpace(self.mesh, Vv_elt, name="Buoyancy") # Buoyancy space
-        Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
+        Vp_elt = TensorProductElement(S2_2d, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
 
         self.W = V * Vp * Vb # velocity, pressure, buoyancy space
@@ -86,7 +86,7 @@ class Boussinesq:
         theta = pi / 3
         self.omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 
-        self.dT = dT
+        self.dT = Constant(dT)
 
         # Test Functions
         self.w, self.phi, self.q = TestFunctions(self.W)
@@ -96,8 +96,9 @@ class Boussinesq:
         yc = self.Ly/2
         a = Constant(5000)
         U = Constant(self.U)
-        self.un.interpolate(as_vector([U,0,0])) # TODO: need to check this.
-        self.bn.interpolate(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
+        un, pn, bn = self.Un.subfunctions
+        un.project(as_vector([U,0,0])) # TODO: need to check this.
+        bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
 
     def build_lu_params(self):
@@ -109,7 +110,7 @@ class Boussinesq:
                         'ksp_type': 'gmres',
                         'snes_monitor': None,
                         # 'snes_type':'ksponly',
-                        # 'ksp_monitor': None,
+                        'ksp_monitor': None,
                         # "ksp_monitor_true_residual": None,
                         'pc_type': 'mg',
                         'pc_mg_type': 'full',
@@ -139,9 +140,9 @@ class Boussinesq:
 
     def build_boundary_condition(self):
         # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
-        bc1 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "top")
-        bc2 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "bottom")
-        bc3 = DirichletBC(self.W.sub(0), as_vector([0., 0.]), "on_boundary")
+        bc1 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "top")
+        bc2 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "bottom")
+        bc3 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
         self.bcs = [bc1, bc2, bc3]
 
     def build_NonlinearVariationalSolver(self):
@@ -156,8 +157,8 @@ class Boussinesq:
         omega = self.omega
         def u_eqn(w):# TODO: need to complete the velocity equation.
             return (
-                w * (unp1 - un) * dx +
-                dT * inner(w, 2 * outer(omega, unph)) * dx -
+                inner(w, (unp1 - un)) * dx +
+                dT * inner(w, 2 * cross(omega, unph)) * dx -
                 dT * div(w) * pnph * dx - dT * inner(w, k) * bnph * dx
             )
 
@@ -178,9 +179,9 @@ class Boussinesq:
 
         # Nullspace for the problem
         v_basis = VectorSpaceBasis(constant=True) #pressure field nullspace
-        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis])
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
         trans_null = VectorSpaceBasis(constant=True)
-        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null])
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
         self.nsolver = NonlinearVariationalSolver(
                                                     self.nprob,
                                                     nullspace=self.nullspace,
@@ -194,8 +195,8 @@ class Boussinesq:
         Unp1 = self.Unp1
 
         name = "lb_imp"
-        file_lb = File(name+'.pvd')
-        un, Pin, bn = Un.split()
+        file_lb = VTKFile(name+'.pvd')
+        un, Pin, bn = Un.subfunctions
         file_lb.write(un, Pin, bn)
         Unp1.assign(Un)
 
@@ -220,20 +221,23 @@ class Boussinesq:
 
 if __name__ == "__main__":
     N=1.0e-2
-    U=20.
+    U=0.
     dT=600.
-    nx=10
-    ny=1
-    Lx=10
-    Ly=1.0e-3
+    nx=100
+    ny=3
+    Lx=3.0e5
+    Ly=1.0e-3 * Lx
     height=1e4
-    nlayers=20
+    nlayers=50
     horiz_num=80
     radius=2
+    tmax = 3600.0
+    dt = 600.0
 
     eqn = Boussinesq(N=N, U=U, dT=dT, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
     eqn.build_initial_data()
-    eqn.build_lu_params()
+    # eqn.build_lu_params()
+    eqn.build_ASM_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
-    eqn.time_stepping()
+    eqn.time_stepping(tmax=tmax, dt=dt)
