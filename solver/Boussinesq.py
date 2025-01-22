@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 
 class Boussinesq:
-    def __init__(self, N=1.0e-2, U=0., dt=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
+    def __init__(self, N=1.0e-2, U=0., dt=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20):
 
         # Extruded Mesh 3D
         self.nx = nx
@@ -61,9 +61,9 @@ class Boussinesq:
         # self.w, self.q, self.phi = TestFunctions(self.W)#TODO: This changes the function space order.
 
         # Setting up the intermediate variables for second order accuracy.
-        self.unph = 0.5*(self.un + self.unp1)
-        self.bnph = 0.5*(self.bn + self.bnp1)
-        self.pnph = 0.5*(self.pn + self.pnp1)
+        self.unph = 0.5 * (self.un + self.unp1)
+        self.bnph = 0.5 * (self.bn + self.bnp1)
+        self.pnph = 0.5 * (self.pn + self.pnp1)
 
         # Setting up the normal vector, buoyancy frequency, coriolis parameter and time step.
         self.n = FacetNormal(self.mesh)
@@ -83,42 +83,51 @@ class Boussinesq:
         # un.project(as_vector([U,0,0])) # TODO: need to check this.
         bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
+        # Project the hydrostatic pressure as initial guess.
+        DG = FunctionSpace(self.mesh, 'DG', 0)
+        One = Function(DG).assign(1.0)
+        area = assemble(One*dx)
+        pn.project(0.5 * self.N**2 * self.z **2)
+        pn_int = assemble(pn*dx)
+        pn.project(pn - pn_int/area)
+        print("Calulated hydrostatic pressure as initial guess and satisfies the pressure condition.")
+
 
     def build_lu_params(self):
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
     
     def build_ASM_MH_params(self):
         self.params = {
-                        'mat_type': 'matfree',
-                        'ksp_type': 'gmres',
-                        'snes_monitor': None,
-                        # 'snes_type':'ksponly',
-                        'ksp_monitor': None,
-                        # "ksp_monitor_true_residual": None,
-                        'pc_type': 'mg',
-                        'pc_mg_type': 'full',
-                        "ksp_converged_reason": None,
-                        "snes_converged_reason": None,
-                        'mg_levels': {
-                                'ksp_type': 'richardson',
-                                # "ksp_monitor_true_residual": None,
-                                # "ksp_view": None,
-                                "ksp_atol": 1e-50,
-                                "ksp_rtol": 1e-10,
-                                'ksp_max_it': 1,
-                                'pc_type': 'python',
-                                'pc_python_type': 'firedrake.AssembledPC',
-                                'assembled_pc_type': 'python',
-                                'assembled_pc_python_type': 'firedrake.ASMVankaPC',
-                                'assembled_pc_vanka_construct_dim': 0,
-                                'assembled_pc_vanka_sub_sub_pc_type': 'lu'
-                                #'assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type':'mumps'
-                                },
-                        'mg_coarse': {
-                                'ksp_type': 'preonly',
-                                'pc_type': 'lu'
-                                }
-                        }
+            'mat_type': 'matfree',
+            'ksp_type': 'gmres',
+            'snes_monitor': None,
+            # 'snes_type':'ksponly',
+            'ksp_monitor': None,
+            # "ksp_monitor_true_residual": None,
+            'pc_type': 'mg',
+            'pc_mg_type': 'full',
+            "ksp_converged_reason": None,
+            "snes_converged_reason": None,
+            'mg_levels': {
+                'ksp_type': 'richardson',
+                # "ksp_monitor_true_residual": None,
+                # "ksp_view": None,
+                "ksp_atol": 1e-50,
+                "ksp_rtol": 1e-10,
+                'ksp_max_it': 1,
+                'pc_type': 'python',
+                'pc_python_type': 'firedrake.AssembledPC',
+                'assembled_pc_type': 'python',
+                'assembled_pc_python_type': 'firedrake.ASMVankaPC',
+                'assembled_pc_vanka_construct_dim': 0,
+                'assembled_pc_vanka_sub_sub_pc_type': 'lu'
+                #'assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type':'mumps'
+                },
+            'mg_coarse': {
+                'ksp_type': 'preonly',
+                'pc_type': 'lu'
+                }
+            }
 
 
     def build_pure_Vanka_params(self):
@@ -238,13 +247,11 @@ if __name__ == "__main__":
     Ly=1.0e-3 * Lx
     height=1e4
     nlayers=10
-    horiz_num=80
-    radius=2
 
-    eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
+    eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
-    eqn.build_lu_params()
-    # eqn.build_pure_Vanka_params()
+    # eqn.build_lu_params()
+    eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
