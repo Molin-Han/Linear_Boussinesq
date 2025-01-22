@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 
 class Boussinesq:
-    def __init__(self, N=1.0e-2, U=0., dT=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
+    def __init__(self, N=1.0e-2, U=0., dt=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20, horiz_num=80, radius=2):
 
         # Extruded Mesh 3D
         self.nx = nx
@@ -15,7 +15,8 @@ class Boussinesq:
         self.height = height
         self.U = U # steady velocity
         self.N = N # buoyancy frequency
-        # self.m = UnitSquareMesh(self.nx, self.ny)
+
+        # Create the mesh
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
         # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
         # self.mh = MeshHierarchy(self.m, refinement_levels=0)
@@ -25,75 +26,52 @@ class Boussinesq:
         # Mixed Finite Element Space
         horizontal_degree = 2
         vertical_degree = 2
-        # TODO: need to check the base spaces.
-        # horizontal base spaces
-        S1 = FiniteElement("CG", interval, horizontal_degree) # CG2
-        S2 = FiniteElement("DG", interval, horizontal_degree-1) # DG1
 
-        S1_2d = FiniteElement("RTCF", quadrilateral, horizontal_degree) # RT2
-        S2_2d = FiniteElement("DQ", quadrilateral, horizontal_degree-1) # DG1
+        # horizontal base spaces -- 2D
+        S1 = FiniteElement("RTCF", quadrilateral, horizontal_degree) # RT2 in 2D
+        S2 = FiniteElement("DQ", quadrilateral, horizontal_degree-1) # DG1 in 2D
         # vertical base spaces
         T0 = FiniteElement("CG", interval, vertical_degree) # CG2
         T1 = FiniteElement("DG", interval, vertical_degree-1) # DG1
 
-        # Successful build of the 2D element.
-        Vh_elt = TensorProductElement(S1_2d, T1) # CG horizontal and DG vertical
-        V_2h = HDivElement(Vh_elt)
-        Vv_elt = TensorProductElement(S2_2d, T0) # DG horizontal and CG vertical
-        V_2v = HDivElement(Vv_elt)
-        V_2d = V_2h + V_2v # quadrilateral RT element in 2D
-
-        # Attempt to build the 3D element. #TODO: this has bug here.
-        Vh_elt_3d = TensorProductElement(S1_2d, T1)
-        Vh_3d = HDivElement(Vh_elt_3d)
-        Vv_elt_3d = TensorProductElement(S2_2d, T0)
-        Vv_3d = HDivElement(Vv_elt_3d)
-        V_3d = Vh_3d + Vv_3d
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
-        # TODO: Checked this expression. This is correct for triangular mesh.
-        # P2i = FiniteElement("CG", interval, 2)
-        # dP1t = FiniteElement("DG", triangle, 1)
-        # dP1i = FiniteElement("DG", interval, 1)
-        # RT2 = FiniteElement("RT", triangle, 2)
-        # Hdiv_h = HDivElement(TensorProductElement(RT2, dP1i))
-        # Hdiv_v = HDivElement(TensorProductElement(dP1t, P2i))
-        # Hdiv_element = Hdiv_h + Hdiv_v
-        # V = FunctionSpace(self.mesh, Hdiv_element, name="HDiv") # Velocity space RT(k)
-        # print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        # Attempt to build the 3D element.
+        Vh_elt = TensorProductElement(S1, T1)
+        Vh = HDivElement(Vh_elt)
+        Vv_elt = TensorProductElement(S2, T0)
+        Vv = HDivElement(Vv_elt)
+        V_3d = Vh + Vv
 
         V = FunctionSpace(self.mesh, V_3d, name="HDiv") # Velocity space RT(k-1)
         Vb = FunctionSpace(self.mesh, Vv_elt, name="Buoyancy") # Buoyancy space
-        Vp_elt = TensorProductElement(S2_2d, T1) # DG horizontal and DG vertical
-        Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure")
+        Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
+        Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure") # Pressure space
 
-        # self.W = V * Vp * Vb # velocity, pressure, buoyancy space
-        self.W = V * Vb * Vp # velocity, buoyancy, pressure space
+        self.W = V * Vp * Vb # velocity, pressure, buoyancy space
+        # self.W = V * Vb * Vp # velocity, buoyancy, pressure space #TODO: This changes the function space order.
         self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
         self.Un = Function(self.W)
         self.Unp1 = Function(self.W)
-        # self.un, self.pn, self.bn = split(self.Un)
-        self.un, self.bn, self.pn = split(self.Un)
-        # self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
-        self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)
-        # self.alpha, self.phi, self.gamma = TestFunctions(self.W)
-        self.alpha, self.gamma, self.phi = TestFunctions(self.W)
+        self.un, self.pn, self.bn = split(self.Un)
+        # self.un, self.bn, self.pn = split(self.Un) #TODO: This changes the function space order.
+        self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
+        # self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)#TODO: This changes the function space order.
+        self.w, self.phi, self.q = TestFunctions(self.W)
+        # self.w, self.q, self.phi = TestFunctions(self.W)#TODO: This changes the function space order.
+
+        # Setting up the intermediate variables for second order accuracy.
         self.unph = 0.5*(self.un + self.unp1)
         self.bnph = 0.5*(self.bn + self.bnp1)
         self.pnph = 0.5*(self.pn + self.pnp1)
 
+        # Setting up the normal vector, buoyancy frequency, coriolis parameter and time step.
         self.n = FacetNormal(self.mesh)
         self.k = as_vector([0, 0, 1])
         Omega = 7.292e-5
         theta = pi / 3
         self.omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
-
-        self.dT = Constant(dT)
-
-        # Test Functions
-        self.w, self.phi, self.q = TestFunctions(self.W)
+        self.dt = Constant(dt)
 
     def build_initial_data(self):
         xc = self.Lx/2
@@ -141,7 +119,7 @@ class Boussinesq:
                                 'pc_type': 'lu'
                                 }
                         }
-    # TODO: need to build the parameters for the ASM solver.
+
 
     def build_pure_Vanka_params(self):
         self.params = {
@@ -180,20 +158,20 @@ class Boussinesq:
         unph, pnph, bnph = self.unph, self.pnph, self.bnph
         w, phi, q = self.w, self.phi, self.q
         k = self.k
-        dT = self.dT
+        dt = self.dt
         N = self.N
         omega = self.omega
-        def u_eqn(w):# TODO: need to complete the velocity equation.
+        def u_eqn(w):
             return (
                 inner(w, (unp1 - un)) * dx +
-                dT * inner(w, 2 * cross(omega, unph)) * dx -
-                dT * div(w) * pnph * dx - dT * inner(w, k) * bnph * dx
+                dt * inner(w, 2 * cross(omega, unph)) * dx -
+                dt * div(w) * pnph * dx - dt * inner(w, k) * bnph * dx
             )
 
         def b_eqn(q):
             return (
                 q * (bnp1 - bn) * dx +
-                dT * N**2 * q * inner(k, unph) * dx
+                dt * N**2 * q * inner(k, unph) * dx
             )
 
         def p_eqn(phi):
@@ -207,11 +185,11 @@ class Boussinesq:
 
         # Nullspace for the problem
         v_basis = VectorSpaceBasis(constant=True) #pressure field nullspace
-        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
-        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis])
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
+        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis]) #TODO: This changes the function space order.
         trans_null = VectorSpaceBasis(constant=True)
-        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
-        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null])
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
+        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null]) #TODO: This changes the function space order.
         self.nsolver = NonlinearVariationalSolver(
                                                     self.nprob,
                                                     nullspace=self.nullspace,
@@ -233,8 +211,8 @@ class Boussinesq:
         t = 0.0
         dumpt = 600.
         tdump = 0.
-        self.dT.assign(dt)
-        print('tmax=', tmax, 'dt=', dt)
+        self.dt.assign(dt)
+        print('tmax=', tmax, 'dt=', self.dt)
         while t < tmax - 0.5*dt:
             print(t)
             t += dt
@@ -252,22 +230,21 @@ class Boussinesq:
 if __name__ == "__main__":
     N=1.0e-2
     U=0.
-    dT=600.
-    nx=20
-    ny=3
+    dt=600.0
+    tmax = 6000.0
+    nx=10
+    ny=1
     Lx=3.0e5
     Ly=1.0e-3 * Lx
     height=1e4
-    nlayers=40
+    nlayers=10
     horiz_num=80
     radius=2
-    tmax = 3600.0
-    dt = 600.0
 
-    eqn = Boussinesq(N=N, U=U, dT=dT, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
+    eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers, horiz_num=horiz_num, radius=radius)
     eqn.build_initial_data()
-    # eqn.build_lu_params()
-    eqn.build_pure_Vanka_params()
+    eqn.build_lu_params()
+    # eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
