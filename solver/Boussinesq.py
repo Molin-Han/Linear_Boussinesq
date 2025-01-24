@@ -87,7 +87,7 @@ class Boussinesq:
         DG = FunctionSpace(self.mesh, 'DG', 0)
         One = Function(DG).assign(1.0)
         area = assemble(One*dx)
-        pn.project(0.5 * self.N**2 * self.z **2)
+        pn.project(0.5 * self.N**2 * self.z**2)
         pn_int = assemble(pn*dx)
         pn.project(pn - pn_int/area)
         print("Calulated hydrostatic pressure as initial guess and satisfies the pressure condition.")
@@ -193,10 +193,10 @@ class Boussinesq:
         self.nprob = NonlinearVariationalProblem(eqn, self.Unp1, bcs=bcs)
 
         # Nullspace for the problem
-        v_basis = VectorSpaceBasis(constant=True) #pressure field nullspace
+        v_basis = VectorSpaceBasis(constant=True,comm=COMM_WORLD) #pressure field nullspace
         self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
         # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis]) #TODO: This changes the function space order.
-        trans_null = VectorSpaceBasis(constant=True)
+        trans_null = VectorSpaceBasis(constant=True,comm=COMM_WORLD)
         self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
         # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null]) #TODO: This changes the function space order.
         self.nsolver = NonlinearVariationalSolver(
@@ -251,7 +251,9 @@ if __name__ == "__main__":
     eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
     # eqn.build_lu_params()
-    eqn.build_pure_Vanka_params()
+    eqn.build_ASM_MH_params()
+    # eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
+    print("The simulation is completed.")
