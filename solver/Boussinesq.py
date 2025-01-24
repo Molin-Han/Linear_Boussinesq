@@ -79,17 +79,23 @@ class Boussinesq:
         a = Constant(5000)
         U = Constant(self.U)
         un, pn, bn = self.Un.subfunctions
+        unp1, pnp1, bnp1 = self.Unp1.subfunctions
         un.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
+        unp1.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
         # un.project(as_vector([U,0,0])) # TODO: need to check this.
         bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
+        bnp1.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
         # Project the hydrostatic pressure as initial guess.
         DG = FunctionSpace(self.mesh, 'DG', 0)
         One = Function(DG).assign(1.0)
         area = assemble(One*dx)
         pn.project(0.5 * self.N**2 * self.z**2)
+        pnp1.project(0.5 * self.N**2 * self.z**2)
         pn_int = assemble(pn*dx)
         pn.project(pn - pn_int/area)
+        pnp1_int = assemble(pnp1*dx)
+        pnp1.project(pnp1 - pnp1_int/area)
         print("Calulated hydrostatic pressure as initial guess and satisfies the pressure condition.")
 
 
@@ -135,10 +141,11 @@ class Boussinesq:
             "mat_type": "matfree",
             "ksp_type": "gmres",
             'snes_monitor': None,
+            "snes_view": None,
             "ksp_converged_reason": None,
             "snes_converged_reason": None,
             'ksp_monitor': None,
-            # "ksp_monitor_true_residual": None,
+            "ksp_monitor_true_residual": None,
             # "ksp_view": None,
             "ksp_atol": 1e-8,
             "ksp_rtol": 1e-8,
@@ -226,6 +233,8 @@ class Boussinesq:
             print(t)
             t += dt
             tdump += dt
+            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.nsolver.snes.getInitialGuess())
+            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.nsolver.snes.ksp.getInitialGuessNonzero())
 
             self.nsolver.solve()
             print("The nonlinear solver is solved.")
@@ -251,8 +260,8 @@ if __name__ == "__main__":
     eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
     # eqn.build_lu_params()
-    eqn.build_ASM_MH_params()
-    # eqn.build_pure_Vanka_params()
+    # eqn.build_ASM_MH_params()
+    eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
