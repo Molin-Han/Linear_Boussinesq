@@ -3,7 +3,9 @@ import numpy as np
 import scipy as sp
 from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
+from petsc4py import PETSc
 
+print = PETSc.Sys.Print
 class Boussinesq:
     def __init__(self, N=1.0e-2, U=0., dt=600., nx=5e3, ny=1, Lx=1e3, Ly=1, height=1e4, nlayers=20):
 
@@ -19,8 +21,8 @@ class Boussinesq:
         # Create the mesh
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
         # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
-        # self.mh = MeshHierarchy(self.m, refinement_levels=0)
-        # self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
+        self.mh = MeshHierarchy(self.m, refinement_levels=0)
+        self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
         self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
 
         # Mixed Finite Element Space
@@ -46,19 +48,19 @@ class Boussinesq:
         Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure") # Pressure space
 
-        self.W = V * Vp * Vb # velocity, pressure, buoyancy space
-        # self.W = V * Vb * Vp # velocity, buoyancy, pressure space #TODO: This changes the function space order.
+        # self.W = V * Vp * Vb # velocity, pressure, buoyancy space
+        self.W = V * Vb * Vp # velocity, buoyancy, pressure space #TODO: This changes the function space order.
         self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
         self.Un = Function(self.W)
         self.Unp1 = Function(self.W)
-        self.un, self.pn, self.bn = split(self.Un)
-        # self.un, self.bn, self.pn = split(self.Un) #TODO: This changes the function space order.
-        self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
-        # self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)#TODO: This changes the function space order.
-        self.w, self.phi, self.q = TestFunctions(self.W)
-        # self.w, self.q, self.phi = TestFunctions(self.W)#TODO: This changes the function space order.
+        # self.un, self.pn, self.bn = split(self.Un)
+        self.un, self.bn, self.pn = split(self.Un) #TODO: This changes the function space order.
+        # self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
+        self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)#TODO: This changes the function space order.
+        # self.w, self.phi, self.q = TestFunctions(self.W)
+        self.w, self.q, self.phi = TestFunctions(self.W)#TODO: This changes the function space order.
 
         # Setting up the intermediate variables for second order accuracy.
         self.unph = 0.5 * (self.un + self.unp1)
@@ -78,8 +80,10 @@ class Boussinesq:
         yc = self.Ly/2
         a = Constant(5000)
         U = Constant(self.U)
-        un, pn, bn = self.Un.subfunctions
-        unp1, pnp1, bnp1 = self.Unp1.subfunctions
+        # un, pn, bn = self.Un.subfunctions
+        un, bn, pn = self.Un.subfunctions
+        # unp1, pnp1, bnp1 = self.Unp1.subfunctions #TODO: change the order of function space.
+        unp1, bnp1, pnp1 = self.Unp1.subfunctions
         un.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
         unp1.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
         # un.project(as_vector([U,0,0])) # TODO: need to check this.
@@ -118,8 +122,6 @@ class Boussinesq:
                 'ksp_type': 'richardson',
                 # "ksp_monitor_true_residual": None,
                 # "ksp_view": None,
-                "ksp_atol": 1e-50,
-                "ksp_rtol": 1e-10,
                 'ksp_max_it': 1,
                 'pc_type': 'python',
                 'pc_python_type': 'firedrake.AssembledPC',
@@ -145,7 +147,7 @@ class Boussinesq:
             "snes_converged_reason": None,
             "ksp_converged_reason": None,
             'ksp_monitor': None,
-            "ksp_monitor_true_residual": None,
+            # "ksp_monitor_true_residual": None,
             # "ksp_view": None,
             "ksp_atol": 1e-8,
             "ksp_rtol": 1e-8,
@@ -156,7 +158,8 @@ class Boussinesq:
             "assembled_pc_python_type": "firedrake.ASMVankaPC",
             "assembled_pc_vanka_construct_dim": 0,
             "assembled_pc_vanka_sub_sub_pc_type": "lu",
-            "assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type":'mumps'
+            # "assembled_pc_vanka_sub_sub_pc_factor_mat_solver_type":'mumps',
+            # "assembled_pc_vanka_sub_sub_pc_factor_mat_ordering_type":'rcm',
             }
 
 
@@ -201,11 +204,11 @@ class Boussinesq:
 
         # Nullspace for the problem
         v_basis = VectorSpaceBasis(constant=True,comm=COMM_WORLD) #pressure field nullspace
-        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
-        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis]) #TODO: This changes the function space order.
+        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis]) #TODO: This changes the function space order.
         trans_null = VectorSpaceBasis(constant=True,comm=COMM_WORLD)
-        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
-        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null]) #TODO: This changes the function space order.
+        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null]) #TODO: This changes the function space order.
         self.nsolver = NonlinearVariationalSolver(
                                                     self.nprob,
                                                     nullspace=self.nullspace,
@@ -220,7 +223,8 @@ class Boussinesq:
 
         name = "lb_imp"
         file_lb = VTKFile(name+'.pvd')
-        un, Pin, bn = Un.subfunctions
+        # un, Pin, bn = Un.subfunctions
+        un, bn, Pin = Un.subfunctions #TODO: This changes the function space order.
         file_lb.write(un, Pin, bn)
         Unp1.assign(Un)
 
@@ -260,8 +264,8 @@ if __name__ == "__main__":
     eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
     # eqn.build_lu_params()
-    # eqn.build_ASM_MH_params()
-    eqn.build_pure_Vanka_params()
+    eqn.build_ASM_MH_params()
+    # eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
     eqn.time_stepping(tmax=tmax, dt=dt)
