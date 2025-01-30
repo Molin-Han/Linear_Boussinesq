@@ -48,19 +48,15 @@ class Boussinesq:
         Vp_elt = TensorProductElement(S2, T1) # DG horizontal and DG vertical
         Vp = FunctionSpace(self.mesh, Vp_elt, name="Pressure") # Pressure space
 
-        # self.W = V * Vp * Vb # velocity, pressure, buoyancy space
-        self.W = V * Vb * Vp # velocity, buoyancy, pressure space #TODO: This changes the function space order.
+        self.W = V * Vb * Vp # velocity, buoyancy, pressure space
         self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
         self.Un = Function(self.W)
         self.Unp1 = Function(self.W)
-        # self.un, self.pn, self.bn = split(self.Un)
-        self.un, self.bn, self.pn = split(self.Un) #TODO: This changes the function space order.
-        # self.unp1, self.pnp1, self.bnp1 = split(self.Unp1)
-        self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)#TODO: This changes the function space order.
-        # self.w, self.phi, self.q = TestFunctions(self.W)
-        self.w, self.q, self.phi = TestFunctions(self.W)#TODO: This changes the function space order.
+        self.un, self.bn, self.pn = split(self.Un)
+        self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)
+        self.w, self.q, self.phi = TestFunctions(self.W)
 
         # Setting up the intermediate variables for second order accuracy.
         self.unph = 0.5 * (self.un + self.unp1)
@@ -80,13 +76,10 @@ class Boussinesq:
         yc = self.Ly/2
         a = Constant(5000)
         U = Constant(self.U)
-        # un, pn, bn = self.Un.subfunctions
         un, bn, pn = self.Un.subfunctions
-        # unp1, pnp1, bnp1 = self.Unp1.subfunctions #TODO: change the order of function space.
         unp1, bnp1, pnp1 = self.Unp1.subfunctions
         un.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
         unp1.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-        # un.project(as_vector([U,0,0])) # TODO: need to check this.
         bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
         bnp1.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
 
@@ -164,7 +157,7 @@ class Boussinesq:
 
 
     def build_boundary_condition(self):
-        # Boundary conditions #TODO: need to check how to ensure the condition on pressure.
+        # Boundary conditions
         bc1 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "top")
         bc2 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "bottom")
         bc3 = DirichletBC(self.W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
@@ -204,11 +197,9 @@ class Boussinesq:
 
         # Nullspace for the problem
         v_basis = VectorSpaceBasis(constant=True,comm=COMM_WORLD) #pressure field nullspace
-        # self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), v_basis, self.W.sub(2)])
-        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis]) #TODO: This changes the function space order.
+        self.nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), v_basis])
         trans_null = VectorSpaceBasis(constant=True,comm=COMM_WORLD)
-        # self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), trans_null, self.W.sub(2)])
-        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null]) #TODO: This changes the function space order.
+        self.trans_nullspace = MixedVectorSpaceBasis(self.W, [self.W.sub(0), self.W.sub(1), trans_null])
         self.nsolver = NonlinearVariationalSolver(
                                                     self.nprob,
                                                     nullspace=self.nullspace,
@@ -223,8 +214,7 @@ class Boussinesq:
 
         name = "lb_imp"
         file_lb = VTKFile(name+'.pvd')
-        # un, Pin, bn = Un.subfunctions
-        un, bn, Pin = Un.subfunctions #TODO: This changes the function space order.
+        un, bn, Pin = Un.subfunctions
         file_lb.write(un, Pin, bn)
         Unp1.assign(Un)
 
@@ -237,8 +227,6 @@ class Boussinesq:
             print(t)
             t += dt
             tdump += dt
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.nsolver.snes.getInitialGuess())
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.nsolver.snes.ksp.getInitialGuessNonzero())
 
             self.nsolver.solve()
             print("The nonlinear solver is solved.")
