@@ -190,7 +190,7 @@ class Boussinesq:
             return (
                 phi * div(unph) * dx
             )
-        
+
         eqn = u_eqn(w) + b_eqn(q) + p_eqn(phi)
         bcs = self.bcs
         self.nprob = NonlinearVariationalProblem(eqn, self.Unp1, bcs=bcs)
@@ -243,7 +243,7 @@ if __name__ == "__main__":
     dt=600.0
     tmax = 6000.0
     nx=10
-    ny=1
+    ny=5
     Lx=3.0e5
     Ly=1.0e-3 * Lx
     height=1e4
