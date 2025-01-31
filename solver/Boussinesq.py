@@ -80,8 +80,9 @@ class Boussinesq:
         unp1, bnp1, pnp1 = self.Unp1.subfunctions
         un.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
         unp1.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-        bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
-        bnp1.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2))
+        # Solve the equation for the whole variable instead of only the perturbed variable.
+        bn.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2) + self.N**2 * self.z)
+        bnp1.project(sin(pi*self.z/self.height)/(1+((self.x-xc)**2+(self.y-yc)**2)/a**2) + self.N**2 * self.z)
 
         # Project the hydrostatic pressure as initial guess.
         DG = FunctionSpace(self.mesh, 'DG', 0)
@@ -242,8 +243,8 @@ if __name__ == "__main__":
     U=0.
     dt=600.0
     tmax = 6000.0
-    nx=10
-    ny=5
+    nx=30
+    ny=1
     Lx=3.0e5
     Ly=1.0e-3 * Lx
     height=1e4
