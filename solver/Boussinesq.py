@@ -17,6 +17,9 @@ class Boussinesq:
         self.height = height
         self.U = U # steady velocity
         self.N = N # buoyancy frequency
+        self.ar = height / Lx
+        self.dx = Lx / nx
+        self.dz = height / nlayers
 
         # Create the mesh
         self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
@@ -209,7 +212,7 @@ class Boussinesq:
                                                     options_prefix='linear_boussinesq_ASM'
                                                     )
 
-    def time_stepping(self, tmax=3600.0, dt=600.0):
+    def time_stepping(self, tmax=3600.0, dt=600.0, monitor=False, xtest=False, ztest=False, artest=False):
         Un = self.Un
         Unp1 = self.Unp1
 
@@ -228,9 +231,35 @@ class Boussinesq:
             print(t)
             t += dt
             tdump += dt
-
-            self.nsolver.solve()
-            print("The nonlinear solver is solved.")
+            if monitor:
+                self.sol_final = np.loadtxt(f'sol_final_{int(t)}.out')
+                error_list = []
+                # Set a monitor
+                def my_monitor_func(ksp, iteration_number, norm):
+                    #print(f"The monitor is operating with current iteration {iteration_number}")
+                    sol = ksp.buildSolution()
+                    # Used relative error here
+                    err = np.linalg.norm(self.sol_final - sol.getArray(), ord=2) / np.linalg.norm(self.sol_final)
+                    #print(f"error norm is {err}")
+                    error_list.append(err)
+                self.nsolver.snes.ksp.setMonitor(my_monitor_func)
+                self.nsolver.solve()
+                # print(error_list)
+                print("Monitor is on and working.")
+                if artest:
+                    # test for the aspect ratio
+                    np.savetxt(f'err_ar_{self.ar}_{int(t)}.out', error_list)
+                if xtest:
+                    # test for the different dx
+                    np.savetxt(f'err_dx_{self.dx}_{int(t)}.out', error_list)
+                if ztest:
+                    # test for the different dz
+                    np.savetxt(f'err_dz_{self.dz}_{int(t)}.out', error_list)
+            else:
+                self.nsolver.solve()
+                self.sol_final = self.nsolver.snes.ksp.getSolution().getArray()
+                np.savetxt(f'sol_final_{int(t)}.out',self.sol_final)
+                print("The nonlinear solver is solved and final solution is saved.")
             self.Un.assign(self.Unp1)
 
             if tdump > dumpt - dt*0.5:
@@ -257,5 +286,5 @@ if __name__ == "__main__":
     # eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
-    eqn.time_stepping(tmax=tmax, dt=dt)
+    eqn.time_stepping(tmax=tmax, dt=dt, monitor=True)
     print("The simulation is completed.")
