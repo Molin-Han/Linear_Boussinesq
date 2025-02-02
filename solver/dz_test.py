@@ -13,19 +13,21 @@ nx=30
 ny=1
 Lx=3.0e5
 Ly=1.0e-3 * Lx
-# height=1e4
-height_array = np.arange(10, 2.0, -1.0) * 1e4
-nlayers=10
+height=1e4
+nlayers_array = np.arange(2, 11, 2) * 10
 fig, ax = plt.subplots()
 ax.set_title("The solution error")
-ar_list = []
+dz_list = []
 
-for i in height_array:
+for i in nlayers_array:
     print(i)
-    height = i
+    nlayers = i
+    dz = height / nlayers
     ar = height/ Lx
     print(f"Aspect ratio is {ar}")
-    ar_list.append(ar)
+    print(f"The dz is {dz}")
+    dz_list.append(dz)
+
     eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
     eqn.build_ASM_MH_params()
@@ -38,19 +40,22 @@ for i in height_array:
     eqn_monitor.build_ASM_MH_params()
     eqn_monitor.build_boundary_condition()
     eqn_monitor.build_NonlinearVariationalSolver()
-    eqn_monitor.time_stepping(tmax=tmax, dt=dt, monitor=True, artest=True)
+    eqn_monitor.time_stepping(tmax=tmax, dt=dt, monitor=True, ztest=True)
 
     print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!Finish Calculation for ar = {ar}")
 
 
+i = 0
 time = 1200.0
-for ratio in ar_list:
-    error = np.loadtxt(f'err_ar_{ratio}_{int(time)}.out')
+for dz in dz_list:
+    nlayer = nlayers_array[i]
+    i += 1
+    error = np.loadtxt(f'err_dz_{dz}_{int(time)}.out')
     x = np.arange(len(error))
-    ax.semilogy(x, error, label=f"AR={ratio}")
+    ax.semilogy(x, error, label=f"nlayer={nlayer}")
     plt.legend()
     plt.xlabel("its")
     plt.ylabel("log_error")
-    #plt.savefig(f"error_final{ratio}.png")
+    #plt.savefig(f"error_final{dz}.png")
 
-plt.savefig(f"error_final_ar_{ratio}_{int(time)}.png")
+plt.savefig(f"error_final_dz_{dz}_{int(time)}.png")
