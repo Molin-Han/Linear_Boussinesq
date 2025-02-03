@@ -108,8 +108,11 @@ class Boussinesq:
             'mat_type': 'matfree',
             'ksp_type': 'gmres',
             'snes_monitor': None,
-            # 'snes_type':'ksponly',
+            # 'snes_type':'ksponly', # TODO: do this for the test.
+            'ksp_atol': 0,
+            'ksp_rtol': 1e-8,
             'ksp_monitor': None,
+            # 'snes_lag_jacobian': None, # TODO: check
             # "ksp_monitor_true_residual": None,
             'pc_type': 'mg',
             'pc_mg_type': 'full',
