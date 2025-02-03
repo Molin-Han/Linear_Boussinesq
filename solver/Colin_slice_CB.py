@@ -85,9 +85,11 @@ def pi_eqn(q):
 def u_eqn(w):
     return (
         fd.inner(w, unp1 - un)*fd.dx
+
         - dT*fd.inner(fd.grad(w), fd.outer(unph, Ubar))*fd.dx
         +dT*fd.dot(fd.jump(w), unn('+')*unph('+')
                          - unn('-')*unph('-'))*(fd.dS_v + fd.dS_h)
+
         -dT*fd.div(w)*Pinph*fd.dx - dT*fd.inner(w, k)*bnph*fd.dx
         )
 

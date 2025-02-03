@@ -14,7 +14,7 @@ ny=1
 Lx=3.0e5
 Ly=1.0e-3 * Lx
 height=1e4
-nlayers_array = np.arange(2, 11, 2) * 10
+nlayers_array = np.arange(2, 9, 2) * 10
 fig, ax = plt.subplots()
 ax.set_title("The solution error")
 dz_list = []
@@ -28,19 +28,19 @@ for i in nlayers_array:
     print(f"The dz is {dz}")
     dz_list.append(dz)
 
-    eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
-    eqn.build_initial_data()
-    eqn.build_ASM_MH_params()
-    eqn.build_boundary_condition()
-    eqn.build_NonlinearVariationalSolver()
-    eqn.time_stepping(tmax=tmax, dt=dt, monitor=False, artest=True)
+    # eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
+    # eqn.build_initial_data()
+    # eqn.build_ASM_MH_params()
+    # eqn.build_boundary_condition()
+    # eqn.build_NonlinearVariationalSolver()
+    # eqn.time_stepping(tmax=tmax, dt=dt, monitor=False, artest=True)
     
-    eqn_monitor = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
-    eqn_monitor.build_initial_data()
-    eqn_monitor.build_ASM_MH_params()
-    eqn_monitor.build_boundary_condition()
-    eqn_monitor.build_NonlinearVariationalSolver()
-    eqn_monitor.time_stepping(tmax=tmax, dt=dt, monitor=True, ztest=True)
+    # eqn_monitor = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
+    # eqn_monitor.build_initial_data()
+    # eqn_monitor.build_ASM_MH_params()
+    # eqn_monitor.build_boundary_condition()
+    # eqn_monitor.build_NonlinearVariationalSolver()
+    # eqn_monitor.time_stepping(tmax=tmax, dt=dt, monitor=True, ztest=True)
 
     print(f"!!!!!!!!!!!!!!!!!!!!!!!!!!Finish Calculation for ar = {ar}")
 
