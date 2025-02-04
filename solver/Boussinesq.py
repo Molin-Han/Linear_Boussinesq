@@ -106,13 +106,12 @@ class Boussinesq:
     def build_ASM_MH_params(self):
         self.params = {
             'mat_type': 'matfree',
+            'snes_type':'ksponly', # TODO: do this for prettier plots of error.
             'ksp_type': 'gmres',
             'snes_monitor': None,
-            # 'snes_type':'ksponly', # TODO: do this for the test.
             'ksp_atol': 0,
             'ksp_rtol': 1e-8,
             'ksp_monitor': None,
-            # 'snes_lag_jacobian': None, # TODO: check
             # "ksp_monitor_true_residual": None,
             'pc_type': 'mg',
             'pc_mg_type': 'full',
@@ -230,10 +229,12 @@ class Boussinesq:
         tdump = 0.
         self.dt.assign(dt)
         print('tmax=', tmax, 'dt=', self.dt)
+        i = 0
         while t < tmax - 0.5*dt:
             print(t)
             t += dt
             tdump += dt
+            i += 1
             if monitor:
                 self.sol_final = np.loadtxt(f'sol_final_{int(t)}.out')
                 error_list = []
@@ -254,7 +255,7 @@ class Boussinesq:
                     np.savetxt(f'err_ar_{self.ar}_{int(t)}.out', error_list)
                 if xtest:
                     # test for the different dx
-                    np.savetxt(f'err_dx_{self.dx}_{int(t)}.out', error_list)
+                    np.savetxt(f'err_dx_{self.dx}_{i}.out', error_list)
                 if ztest:
                     # test for the different dz
                     np.savetxt(f'err_dz_{self.dz}_{int(t)}.out', error_list)
@@ -289,5 +290,5 @@ if __name__ == "__main__":
     # eqn.build_pure_Vanka_params()
     eqn.build_boundary_condition()
     eqn.build_NonlinearVariationalSolver()
-    eqn.time_stepping(tmax=tmax, dt=dt, monitor=True)
+    eqn.time_stepping(tmax=tmax, dt=dt, monitor=False)
     print("The simulation is completed.")
