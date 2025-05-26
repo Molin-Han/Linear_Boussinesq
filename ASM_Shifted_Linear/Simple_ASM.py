@@ -19,9 +19,10 @@ AR = height / Lx
 deltax = Lx / nx
 deltaz = height / nlayers
 m = PeriodicRectangleMesh(nx, ny, Lx, Ly, direction='both', quadrilateral=True)
-mh = MeshHierarchy(m, refinement_levels=0)
-hierarchy = ExtrudedMeshHierarchy(mh, height, layers=[1, nlayers], extrusion_type='uniform')
-mesh = ExtrudedMesh(m, nlayers, layer_height=height/nlayers, extrusion_type='uniform')
+mh = MeshHierarchy(m, refinement_levels=2)
+hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+# mesh = ExtrudedMesh(m, nlayers, layer_height=height/nlayers, extrusion_type='uniform')
+mesh = hierarchy[-1]
 
 horizontal_degree = 2
 vertical_degree = 2
@@ -100,9 +101,12 @@ params = {
         'ksp_type': 'chebyshev',
         'ksp_max_it': 1,
         "pc_type": "python",
-        "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
-        "pc_star_construct_dim": 0,
-        "pc_star_sub_sub_pc_type": "lu",
+        # "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
+        # "pc_star_construct_dim": 0,
+        # "pc_star_sub_sub_pc_type": "lu",
+        "pc_python_type": "firedrake.ASMVankaPC", # TODO: shall we use AssembledPC?
+        "pc_vanka_construct_dim": 0,
+        "pc_vanka_sub_sub_pc_type": "lu",
         # 'pc_type': 'python',
         # 'pc_python_type': 'firedrake.AssembledPC',
         # 'assembled_pc_type': 'python',

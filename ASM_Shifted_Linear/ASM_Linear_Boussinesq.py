@@ -1,7 +1,4 @@
 from firedrake import *
-import numpy as np
-import scipy as sp
-from matplotlib import pyplot as plt
 from firedrake.output import VTKFile
 from petsc4py import PETSc
 
@@ -10,21 +7,19 @@ print = PETSc.Sys.Print
 N=1.0e-2
 U=0.
 dt=600.
-tmax = 700.0
+tmax = 3600.0
 nx=30
-ny=1
-Lx=3.0e3
-Ly=1
-height=1e2
+ny=3
+Lx=3.0e5
+Ly=1.0e-3*Lx
+height=1e4
 nlayers=10
 
-AR = height / Lx
-deltax = Lx / nx
-deltaz = height / nlayers
 m = PeriodicRectangleMesh(nx, ny, Lx, Ly, direction='both', quadrilateral=True)
 mh = MeshHierarchy(m, refinement_levels=2)
-hierarchy = ExtrudedMeshHierarchy(mh, height, layers=[1, nlayers], extrusion_type='uniform')
-mesh = hierarchy[-1]
+hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+# mesh = hierarchy[-1]
+mesh = ExtrudedMesh(m, nlayers, layer_height=height/nlayers, extrusion_type='uniform')
 
 horizontal_degree = 2
 vertical_degree = 2
@@ -67,8 +62,8 @@ omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 dtc = Constant(dt)
 
 # Initial Condition
-xc = Lx/2
-yc = Ly/2
+xc = Constant(Lx/2)
+yc = Constant(Ly/2)
 a = Constant(5000)
 U = Constant(0.)
 
@@ -78,10 +73,22 @@ unic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 bnic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
 bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
-
 pnic.project(0.5 * N**2 * z**2)
 pnp1ic.project(0.5 * N**2 * z**2)
+DG0 = FunctionSpace(mesh, 'DG', 0)
+One = Function(DG0).assign(1.0)
+area = assemble(One * dx)
+pnic_int = assemble(pn*dx)
+pnic.project(pn - pnic_int/area)
+pnp1ic_int = assemble(pnp1*dx)
+pnp1ic.project(pnp1ic - pnp1ic_int/area)
 
+# Visualise Initial Condition to confirm.
+# name = 'ic'
+# file_lb = VTKFile(name+'.pvd')
+# u0, b0, P0 = Un.subfunctions
+# file_lb.write(u0, b0, P0)
+# print("Save initial condition.")
 # Boundary Conditions
 bc1 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "top")
 bc2 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "bottom")
@@ -95,8 +102,8 @@ class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
         W = u.function_space()
         velo, b = split(u)
         w, q = split(v)
-        Jp = (inner(velo, w) + dtc / 2 * div(velo) * div(w) + dtc * inner(cross(omega, velo), w))*dx 
-        # Jp -= dtc/2 * inner(w, k) * b * dx
+        Jp = (inner(velo, w) + dtc / 2 * div(velo) * div(w) + dtc * inner(cross(omega, velo), w))*dx
+        Jp -= dtc/2 * inner(w, k) * b * dx
         Jp += inner(b, q)*dx
         Jp += dtc / 2 * N**2 * q * inner(k, velo) * dx
         #  Boundary conditions
@@ -107,66 +114,67 @@ class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
         return (Jp, bcs)
 
 # Parameters
-# TODO: Check if the Schur Complement is correct.
-# helmholtz_schur_pc_params = {
-#             'ksp_monitor': None,
-#             'ksp_type': 'preonly',
-#             'pc_type': 'lu',
-#             'pc_factor_mat_solver_type': 'mumps',
-#         }
+# TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
 helmholtz_schur_pc_params = {
-    'ksp_type': 'preonly',
-    'ksp_max_its': 30,
-    'pc_type': 'mg',
-    'pc_mg_type': 'full',
-    'pc_mg_cycle_type':'v',
-    'mg_levels': {
-        # 'ksp_type': 'gmres',
-        # 'ksp_type':'richardson',
-        'ksp_type': 'chebyshev',
-        # 'ksp_richardson_scale': 0.2,
-        'ksp_max_it': 1,
-        # 'ksp_monitor':None,
-        "pc_type": "python",
-        "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
-        "pc_star_construct_dim": 0,
-        "pc_star_sub_sub_pc_type": "lu",
-        # "pc_star_sub_sub_pc_type": "svd",
-        # "pc_star_sub_sub_pc_svd_monitor": None,
-    },
-    'mg_coarse': {
-        'ksp_type': 'preonly',
-        'pc_type': 'lu',
-    },
-}
-params = {
-    # 'mat_type': 'aij',
-    'ksp_type': 'gmres',
-    'snes_type':'ksponly',
-    'ksp_atol': 0,
-    'ksp_rtol': 1e-5,
-    # 'ksp_view': None,
-    'snes_monitor': None,
-    # 'ksp_monitor': None,
-    'ksp_monitor_true_residual': None,
-    'pc_type': 'fieldsplit',
-    'pc_fieldsplit_type': 'schur',
-    'pc_fieldsplit_schur_fact_type': 'full',
-    'pc_fieldsplit_0_fields': '2',
-    'pc_fieldsplit_1_fields': '0,1',
-    'fieldsplit_0': { # Doing a pure mass solve for the pressure block.
-        'ksp_type': 'preonly',
-        'pc_type': 'bjacobi',
-        'sub_pc_type': 'ilu',
-        # 'pc_factor_mat_solver_type': 'mumps',
-    },
-    'fieldsplit_1': {
-        'ksp_type': 'preonly',
-        'pc_type': 'python',
-        'pc_python_type': __name__ + '.HDivHelmholtzSchurPC',
-        'helmholtzschurpc': helmholtz_schur_pc_params,
-        },
-}
+            'ksp_monitor': None,
+            'ksp_type': 'preonly',
+            'pc_type': 'lu',
+            'pc_factor_mat_solver_type': 'mumps',
+        }
+# helmholtz_schur_pc_params = {
+#     'ksp_type': 'preonly',
+#     'ksp_max_its': 30,
+#     'pc_type': 'mg',
+#     'pc_mg_type': 'full',
+#     'pc_mg_cycle_type':'v',
+#     'mg_levels': {
+#         # 'ksp_type': 'gmres',
+#         # 'ksp_type':'richardson',
+#         'ksp_type': 'chebyshev',
+#         # 'ksp_richardson_scale': 0.2,
+#         'ksp_max_it': 1,
+#         # 'ksp_monitor':None,
+#         "pc_type": "python",
+#         "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
+#         "pc_star_construct_dim": 0,
+#         "pc_star_sub_sub_pc_type": "lu",
+#         # "pc_star_sub_sub_pc_type": "svd",
+#         # "pc_star_sub_sub_pc_svd_monitor": None,
+#     },
+#     'mg_coarse': {
+#         'ksp_type': 'preonly',
+#         'pc_type': 'lu',
+#     },
+# }
+# params = {
+#     # 'mat_type': 'aij',
+#     'ksp_type': 'gmres',
+#     'snes_type':'ksponly',
+#     # 'ksp_atol': 0,
+#     # 'ksp_rtol': 1e-5,
+#     # 'ksp_view': None,
+#     'snes_monitor': None,
+#     # 'ksp_monitor': None,
+#     'ksp_monitor_true_residual': None,
+#     'pc_type': 'fieldsplit',
+#     'pc_fieldsplit_type': 'schur',
+#     'pc_fieldsplit_schur_fact_type': 'full',
+#     'pc_fieldsplit_0_fields': '2',
+#     'pc_fieldsplit_1_fields': '0,1',
+#     'fieldsplit_0': { # Doing a pure mass solve for the pressure block.
+#         'ksp_type': 'preonly',
+#         'pc_type': 'bjacobi',
+#         'sub_pc_type': 'ilu',
+#         # 'pc_factor_mat_solver_type': 'mumps',
+#     },
+#     'fieldsplit_1': {
+#         'ksp_type': 'preonly',
+#         'pc_type': 'python',
+#         'pc_python_type': __name__ + '.HDivHelmholtzSchurPC',
+#         'helmholtzschurpc': helmholtz_schur_pc_params,
+#         },
+# }
+params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
 
 # Equations
 def u_eqn(w):
@@ -189,14 +197,15 @@ def p_eqn(phi):
 eqn = p_eqn(phi) + b_eqn(q) + u_eqn(w)
 shift = u_eqn(w) + b_eqn(q) + p_eqn(phi) + pnph * phi * dx
 Jp = derivative(shift, Unp1)
-nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
+# nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
+nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
 v_basis = VectorSpaceBasis(constant=True, comm=COMM_WORLD)
 nullspace = MixedVectorSpaceBasis(W, [W.sub(0), W.sub(1), v_basis])
 nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
 
 
 # Time Stepping
-name = 'lb_imp'
+name = 'lb_imp_ASM'
 file_lb = VTKFile(name+'.pvd')
 un, bn, Pin = Un.subfunctions
 file_lb.write(un, bn, Pin)
