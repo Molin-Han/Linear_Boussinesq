@@ -22,11 +22,14 @@ class Boussinesq:
         self.dz = height / nlayers
 
         # Create the mesh
-        self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True)
+        distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
+        self.m = PeriodicRectangleMesh(self.nx, self.ny, self.Lx, self.Ly, direction='both',quadrilateral=True, distribution_parameters=distribution_parameters)
         # Build the mesh hierarchy for the extruded mesh to construct vertically constant spaces.
         self.mh = MeshHierarchy(self.m, refinement_levels=0)
         self.hierarchy = ExtrudedMeshHierarchy(self.mh, height,layers=[1, nlayers], extrusion_type='uniform')
         self.mesh = ExtrudedMesh(self.m, nlayers, layer_height = height/nlayers, extrusion_type='uniform')
+        self.finest_mesh_name = "finest"
+        self.mesh.name = self.finest_mesh_name
 
         # Mixed Finite Element Space
         horizontal_degree = 2
@@ -55,7 +58,7 @@ class Boussinesq:
         self.x, self.y, self.z = SpatialCoordinate(self.mesh)
 
         # Setting up the solution variables.
-        self.Un = Function(self.W)
+        self.Un = Function(self.W, name="Un")
         self.Unp1 = Function(self.W)
         self.un, self.bn, self.pn = split(self.Un)
         self.unp1, self.bnp1, self.pnp1 = split(self.Unp1)
@@ -99,10 +102,9 @@ class Boussinesq:
         pnp1.project(pnp1 - pnp1_int/area)
         print("Calulated hydrostatic pressure as initial guess and satisfies the pressure condition.")
 
-
     def build_lu_params(self):
         self.params = {'ksp_type': 'preonly', 'pc_type':'lu', 'mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'}
-    
+
     def build_ASM_MH_params(self):
         self.params = {
             'mat_type': 'matfree',
@@ -265,6 +267,9 @@ class Boussinesq:
                 np.savetxt(f'sol_final_{int(t)}.out',self.sol_final)
                 print("The nonlinear solver is solved and final solution is saved.")
             self.Un.assign(self.Unp1)
+            with CheckpointFile("sol_1.h5", "w") as chk:
+                chk.save_mesh(self.mesh)
+                chk.save_function(Un)
 
             if tdump > dumpt - dt*0.5:
                 file_lb.write(un, Pin, bn)
@@ -275,11 +280,12 @@ if __name__ == "__main__":
     N=1.0e-2
     U=0.
     dt=100.0
-    tmax = 3000.0
-    nx=30
-    ny=1
+    tmax = 150.0
+    nx=6
+    ny=6
     Lx=3.0e5
-    Ly=1.0e-3 * Lx
+    # Ly=1.0e-3 * Lx
+    Ly=Lx
     height=1e4
     nlayers=10
 

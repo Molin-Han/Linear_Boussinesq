@@ -48,7 +48,7 @@ Vp = FunctionSpace(mesh, Vp_elt)
 W = V * Vb * Vp
 x, y, z = SpatialCoordinate(mesh)
 
-Un = Function(W)
+Un = Function(W, name="Un")
 Unp1 = Function(W)
 un, bn, pn = split(Un)
 unp1, bnp1, pnp1 = split(Unp1)
@@ -57,16 +57,6 @@ w, q, phi = TestFunctions(W)
 unph = 0.5 * (un+unp1)
 bnph = 0.5 * (bn+bnp1)
 pnph = 0.5 * (pn+pnp1)
-# pnph = pnp1
-
-Un_shift = Function(W)
-Unp1_shift = Function(W)
-un_shift, bn_shift, pn_shift = split(Un_shift)
-unp1_shift, bnp1_shift, pnp1_shift = split(Unp1_shift)
-
-unph_shift = 0.5 * (un_shift+unp1_shift)
-bnph_shift = 0.5 * (bn_shift+bnp1_shift)
-pnph_shift = 0.5 * (pn_shift+pnp1_shift)
 # pnph = pnp1
 
 n = FacetNormal(mesh)
@@ -84,23 +74,6 @@ U = Constant(0.)
 
 unic, bnic, pnic = Un.subfunctions
 unp1ic, bnp1ic, pnp1ic = Unp1.subfunctions
-unic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-bnic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
-bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
-pnic.project(0.5 * N**2 * z**2)
-pnp1ic.project(0.5 * N**2 * z**2)
-DG0 = FunctionSpace(mesh, 'DG', 0)
-One = Function(DG0).assign(1.0)
-area = assemble(One * dx)
-pnic_int = assemble(pn*dx)
-pnic.project(pn - pnic_int/area)
-pnp1ic_int = assemble(pnp1*dx)
-pnp1ic.project(pnp1ic - pnp1ic_int/area)
-
-
-unic, bnic, pnic = Un_shift.subfunctions
-unp1ic, bnp1ic, pnp1ic = Unp1_shift.subfunctions
 unic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 bnic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
@@ -228,42 +201,18 @@ def p_eqn(phi):
         phi * div(unph) * dx
     )
 
-
-def u_eqn_shift(w):
-    return (
-        inner(w, (unp1_shift - un_shift)) * dx +
-        dtc * inner(w, 2 * cross(omega, unph_shift)) * dx -
-        dtc * div(w) * pnp1_shift * dx - dtc * inner(w, k) * bnph_shift * dx
-    )
-
-def b_eqn_shift(q):
-    return (
-        q * (bnp1_shift - bn_shift) * dx +
-        dtc * N**2 * q * inner(k, unph_shift) * dx
-    )
-
-def p_eqn_shift(phi):
-    return (
-        phi * div(unph_shift) * dx
-    )
-
-
+option_shift = True
 eqn = p_eqn(phi) + b_eqn(q) + u_eqn(w)
-# shift = inner(unp1, w) * dx + dtc * inner(cross(omega, unp1), w) * dx - dtc * div(w) * pnp1 * dx - dtc / 2 * inner(w, k) * bnp1 *dx
-# shift += bnp1 * q * dx + dtc * N**2 / 2 * inner(unp1, k) * q * dx
-# shift += 1/2 * div(unp1) * phi * dx + pnp1 * phi * dx
-eqn_shift = p_eqn_shift(phi) + b_eqn_shift(q) + u_eqn_shift(w)
-shift = eqn_shift + Constant(1) * pnp1 * phi * dx
-Jp = derivative(shift, Unp1_shift)
-
-nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
+shift = eqn + Constant(1) * pnp1 * phi * dx
+Jp = derivative(shift, Unp1)
 v_basis = VectorSpaceBasis(constant=True, comm=COMM_WORLD)
 nullspace = MixedVectorSpaceBasis(W, [W.sub(0), W.sub(1), v_basis])
-nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
-
-
-nprob_shift = NonlinearVariationalProblem(eqn_shift, Unp1_shift, bcs=bcs, Jp=Jp)
-nsolver_shift = NonlinearVariationalSolver(nprob_shift, nullspace=nullspace, solver_parameters=params)
+if not option_shift:
+    nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
+    nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
+else:
+    nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
+    nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
 # Time Stepping
 name = 'lb_imp_ASM'
 file_lb = VTKFile(name+'.pvd')
@@ -282,14 +231,23 @@ while t < tmax - 0.5 * dt:
     tdump += dt
     i += 1
     nsolver.solve()
-    nsolver_shift.solve()
     Un.assign(Unp1)
-    Un_shift.assign(Unp1_shift)
+    if not option_shift:
+        with CheckpointFile("sol.h5", "w") as chk:
+            chk.save_mesh(mesh)
+            chk.save_function(Un)
+    else:
+        with CheckpointFile("sol.h5", "r") as chk:
+                mesh_old = chk.load_mesh(name=finest_mesh_name,distribution_parameters=distribution_parameters)
+                sol = chk.load_function(mesh_old, "Un")
     if tdump > dumpt - dt*0.5:
         file_lb.write(un, bn, pn)
         tdump -= dumpt
-    name = 'diff'
-    diff = Function(W).assign(Unp1_shift - Unp1)
-    u1, b1, p1 = diff.subfunctions
-    file = VTKFile(name+'.pvd')
-    file.write(u1, b1, p1)
+
+
+    if option_shift:
+        name = 'diff'
+        diff = Function(W).assign(sol - Un)
+        u1, b1, p1 = diff.subfunctions
+        file = VTKFile(name+'.pvd')
+        file.write(u1, b1, p1)
