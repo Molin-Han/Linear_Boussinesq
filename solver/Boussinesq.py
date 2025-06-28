@@ -276,6 +276,7 @@ class Boussinesq:
                 tdump -= dumpt
 
 
+
 if __name__ == "__main__":
     N=1.0e-2
     U=0.

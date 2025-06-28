@@ -1,20 +1,28 @@
 from firedrake import *
 from firedrake.output import VTKFile
 from petsc4py import PETSc
-
 print = PETSc.Sys.Print
 
 N=1.0e-2
 U=0.
 dt=100.
 tmax = 150.0
-nx=10
-ny=3
-Lx=3.0e5
-Ly=1.0e-3*Lx
-# Ly = Lx
-height=1e4
+
+nx=20
+ny=20
+Lx=2.0
+Ly=1.0*Lx # TODO: horizontal AR issue happening.
+height=2.0*1e-4
 nlayers=10
+
+
+# nx=10
+# ny=3
+# Lx=3.0e5
+# Ly=1.0e-3*Lx
+# # Ly = Lx
+# height=1e4
+# nlayers=10
 
 distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
 m = PeriodicRectangleMesh(nx, ny, Lx, Ly, direction='both', quadrilateral=True, distribution_parameters=distribution_parameters)
@@ -85,35 +93,35 @@ U = Constant(0.)
 unic, bnic, pnic = Un.subfunctions
 unp1ic, bnp1ic, pnp1ic = Unp1.subfunctions
 unic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
+# unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 bnic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
-bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
+# bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
 pnic.project(0.5 * N**2 * z**2)
-pnp1ic.project(0.5 * N**2 * z**2)
+# pnp1ic.project(0.5 * N**2 * z**2)
 DG0 = FunctionSpace(mesh, 'DG', 0)
 One = Function(DG0).assign(1.0)
 area = assemble(One * dx)
 pnic_int = assemble(pn*dx)
 pnic.project(pn - pnic_int/area)
-pnp1ic_int = assemble(pnp1*dx)
-pnp1ic.project(pnp1ic - pnp1ic_int/area)
+# pnp1ic_int = assemble(pnp1*dx)
+# pnp1ic.project(pnp1ic - pnp1ic_int/area)
 
 
 unic, bnic, pnic = Un_shift.subfunctions
 unp1ic, bnp1ic, pnp1ic = Unp1_shift.subfunctions
 unic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
-unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
+# unp1ic.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
 bnic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
-bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
+# bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2+(y-yc)**2)/a**2) + N**2 * z)
 pnic.project(0.5 * N**2 * z**2)
-pnp1ic.project(0.5 * N**2 * z**2)
+# pnp1ic.project(0.5 * N**2 * z**2)
 DG0 = FunctionSpace(mesh, 'DG', 0)
 One = Function(DG0).assign(1.0)
-area = assemble(One * dx)
+area = assemble(One*dx)
 pnic_int = assemble(pn*dx)
-pnic.project(pn - pnic_int/area)
-pnp1ic_int = assemble(pnp1*dx)
-pnp1ic.project(pnp1ic - pnp1ic_int/area)
+pnic.project(pn-pnic_int/area)
+# pnp1ic_int = assemble(pnp1*dx)
+# pnp1ic.project(pnp1ic - pnp1ic_int/area)
 
 # Visualise Initial Condition to confirm.
 # name = 'ic'
@@ -128,31 +136,31 @@ bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
 bcs = [bc1, bc2, bc3]
 
 # TODO: Mixed Version of this, need to be checked!!!
-class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
-    _prefix = "helmholtzschurpc_"
-    def form(self, pc, u, v):
-        W = u.function_space()
-        velo, b = split(u)
-        w, q = split(v)
-        Jp = (inner(velo, w) + dtc / 2 * div(velo) * div(w) + dtc * inner(cross(omega, velo), w))*dx
-        Jp -= dtc/2 * inner(w, k) * b * dx
-        Jp += inner(b, q)*dx
-        Jp += dtc / 2 * N**2 * q * inner(k, velo) * dx
-        #  Boundary conditions
-        bc1 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "top")
-        bc2 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "bottom")
-        bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
-        bcs = [bc1, bc2, bc3]
-        return (Jp, bcs)
+# class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
+#     _prefix = "helmholtzschurpc_"
+#     def form(self, pc, u, v):
+#         W = u.function_space()
+#         velo, b = split(u)
+#         w, q = split(v)
+#         Jp = (inner(velo, w) + dtc / 2 * div(velo) * div(w) + dtc * inner(cross(omega, velo), w))*dx
+#         Jp -= dtc/2 * inner(w, k) * b * dx
+#         Jp += inner(b, q)*dx
+#         Jp += dtc / 2 * N**2 * q * inner(k, velo) * dx
+#         #  Boundary conditions
+#         bc1 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "top")
+#         bc2 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "bottom")
+#         bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
+#         bcs = [bc1, bc2, bc3]
+#         return (Jp, bcs)
 
 # Parameters
 # TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
-helmholtz_schur_pc_params = {
-            'ksp_monitor': None,
-            'ksp_type': 'preonly',
-            'pc_type': 'lu',
-            'pc_factor_mat_solver_type': 'mumps',
-        }
+# helmholtz_schur_pc_params = {
+#             'ksp_monitor': None,
+#             'ksp_type': 'preonly',
+#             'pc_type': 'lu',
+#             'pc_factor_mat_solver_type': 'mumps',
+#         }
 # helmholtz_schur_pc_params = {
 #     'ksp_type': 'preonly',
 #     'ksp_max_its': 30,
@@ -253,7 +261,7 @@ eqn = p_eqn(phi) + b_eqn(q) + u_eqn(w)
 # shift += bnp1 * q * dx + dtc * N**2 / 2 * inner(unp1, k) * q * dx
 # shift += 1/2 * div(unp1) * phi * dx + pnp1 * phi * dx
 eqn_shift = p_eqn_shift(phi) + b_eqn_shift(q) + u_eqn_shift(w)
-shift = eqn_shift + Constant(1) * pnp1 * phi * dx
+shift = eqn_shift + Constant(0.001) * pnp1_shift * phi * dx
 Jp = derivative(shift, Unp1_shift)
 
 nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
@@ -270,6 +278,7 @@ file_lb = VTKFile(name+'.pvd')
 un, bn, pn = Un.subfunctions
 file_lb.write(un, bn, pn)
 Unp1.assign(Un)
+Unp1_shift.assign(Un_shift)
 
 t = 0.0
 dumpt = dt
@@ -288,8 +297,9 @@ while t < tmax - 0.5 * dt:
     if tdump > dumpt - dt*0.5:
         file_lb.write(un, bn, pn)
         tdump -= dumpt
-    name = 'diff'
+    name = 'diff_lb'
     diff = Function(W).assign(Unp1_shift - Unp1)
     u1, b1, p1 = diff.subfunctions
     file = VTKFile(name+'.pvd')
     file.write(u1, b1, p1)
+    print('relative norm is', norm(diff)/norm(Unp1))
