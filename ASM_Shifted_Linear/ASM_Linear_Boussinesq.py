@@ -17,7 +17,7 @@ tmax = 1000.0
 
 
 nx=10
-ny=3
+ny=1
 Lx=3.0e5
 Ly=1.0e-3*Lx
 # Ly = Lx

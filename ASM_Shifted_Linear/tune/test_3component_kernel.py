@@ -71,6 +71,21 @@ bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
 
 bcs = [bc1, bc2, bc3]
 
+# params = {
+#         'snes_type':'ksponly',
+#         'ksp_type': 'gmres',
+#         'snes_rtol':1e-8,
+#         'snes_atol':0,
+#         'snes_stol':0,
+#         'ksp_rtol': 1e-10,
+#         'ksp_atol':0,
+#         'snes_monitor':None,
+#         'ksp_monitor':None,
+#         'pc_type':'lu',
+#         'mat_type': 'aij',
+#         'pc_factor_mat_solver_type': 'mumps',
+# }
+
 params = {
         'snes_type':'ksponly',
         'ksp_type': 'gmres',
@@ -81,10 +96,25 @@ params = {
         'ksp_atol':0,
         'snes_monitor':None,
         'ksp_monitor':None,
-        'pc_type':'lu',
-        'mat_type': 'aij',
-        'pc_factor_mat_solver_type': 'mumps',
+        'pc_type': 'fieldsplit',
+        'pc_fieldsplit_type': 'schur',
+        'pc_fieldsplit_schur_fact_type': 'full',
+        'pc_fieldsplit_0_fields': '2',
+        'pc_fieldsplit_1_fields': '0,1',
+        'fieldsplit_0': { # Doing a pure mass solve for the pressure block.
+        'ksp_type': 'preonly',
+        'pc_type': 'bjacobi',
+        'sub_pc_type': 'lu',
+        # 'pc_factor_mat_solver_type': 'mumps',
+        },
+        'fieldsplit_1': {
+                # 'ksp_monitor': None,
+                'ksp_type': 'preonly',
+                'pc_type': 'bjacobi',
+                'sub_pc_type': 'lu',
+        },
 }
+
 
 eqn = inner(u,w)*dx + q*b*dx + p*phi*dx
 

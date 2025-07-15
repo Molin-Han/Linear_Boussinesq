@@ -3,17 +3,17 @@ from firedrake.output import VTKFile
 from petsc4py import PETSc
 print = PETSc.Sys.Print
 
-nx=20
-height=1
+nx=10
+height=1e-3
 nlayers=20
 
 
 distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
 m = PeriodicUnitIntervalMesh(nx)
-# mh = MeshHierarchy(m, refinement_levels=2)
-# hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
-# mesh = hierarchy[-1]
-mesh = ExtrudedMesh(m, nlayers, layer_height=height/nlayers, extrusion_type='uniform')
+mh = MeshHierarchy(m, refinement_levels=2)
+hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+mesh = hierarchy[-1]
+# mesh = ExtrudedMesh(m, nlayers, layer_height=height/nlayers, extrusion_type='uniform')
 # Set up the function space using TensorProductElement to have flexibility in the element degrees.
 CG_1 = FiniteElement("CG", interval, 1)
 DG_0 = FiniteElement("DG", interval, 0)
@@ -120,46 +120,47 @@ params_direct = {
         'snes_stol':0,
         'ksp_rtol': 1e-10,
         'ksp_atol':0,
+        'ksp_view': None,
         'snes_monitor':None,
         'ksp_monitor':None,
         'pc_type':'lu',
-        'mat_type': 'aij',
+        # 'mat_type': 'aij', # assembled matrix
         'pc_factor_mat_solver_type': 'mumps',
 }
 
-helmholtz_schur_pc_params = {
-            'ksp_monitor': None,
-            'ksp_type': 'preonly',
-            'pc_type': 'lu',
-            'pc_factor_mat_solver_type': 'mumps',
-        }
-
-
 # helmholtz_schur_pc_params = {
-#     'ksp_type': 'preonly',
-#     'ksp_max_its': 30,
-#     'pc_type': 'mg',
-#     'pc_mg_type': 'full',
-#     'pc_mg_cycle_type':'v',
-#     'mg_levels': {
-#         # 'ksp_type': 'gmres',
-#         # 'ksp_type':'richardson',
-#         'ksp_type': 'chebyshev',
-#         # 'ksp_richardson_scale': 0.2,
-#         'ksp_max_it': 1,
-#         # 'ksp_monitor':None,
-#         "pc_type": "python",
-#         "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
-#         "pc_star_construct_dim": 0,
-#         "pc_star_sub_sub_pc_type": "lu",
-#         # "pc_star_sub_sub_pc_type": "svd",
-#         # "pc_star_sub_sub_pc_svd_monitor": None,
-#     },
-#     'mg_coarse': {
-#         'ksp_type': 'preonly',
-#         'pc_type': 'lu',
-#     },
-# }
+#             'ksp_monitor': None,
+#             'ksp_type': 'preonly',
+#             'pc_type': 'lu',
+#             'pc_factor_mat_solver_type': 'mumps',
+#         }
+
+
+helmholtz_schur_pc_params = {
+    'ksp_type': 'preonly',
+    'ksp_max_its': 30,
+    'pc_type': 'mg',
+    'pc_mg_type': 'full',
+    'pc_mg_cycle_type':'v',
+    'mg_levels': {
+        # 'ksp_type': 'gmres',
+        'ksp_type':'richardson',
+        # 'ksp_type': 'chebyshev',
+        'ksp_richardson_scale': 0.2, #TODO: tune.
+        'ksp_max_it': 2,
+        # 'ksp_monitor':None,
+        "pc_type": "python",
+        "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
+        "pc_star_construct_dim": 0,
+        "pc_star_sub_sub_pc_type": "lu",
+        # "pc_star_sub_sub_pc_type": "svd",
+        # "pc_star_sub_sub_pc_svd_monitor": None,
+    },
+    'mg_coarse': {
+        'ksp_type': 'preonly',
+        'pc_type': 'lu',
+    },
+}
 
 
 params_schur = {
@@ -185,6 +186,7 @@ params_schur = {
     },
     'fieldsplit_1': {
         'ksp_type': 'preonly',
+        'ksp_monitor': None,
         'pc_type': 'python',
         'pc_python_type': __name__ + '.HDivSchurPC',
         'helmholtzschurpc': helmholtz_schur_pc_params,
@@ -197,7 +199,7 @@ nsolvers = NonlinearVariationalSolver(nprobs, nullspace=nullspace, solver_parame
 
 name = 'diff'
 file = VTKFile(name + '.pvd')
-nsolver.solve() # TODO: Make a mesh Hierarchy will break the direct solver
+# nsolver.solve() # TODO: Make a mesh Hierarchy will break the direct solver
 nsolvers.solve()
 diff = Function(W).assign(Us - U)
 u_sol, b_sol, p_sol = diff.subfunctions
