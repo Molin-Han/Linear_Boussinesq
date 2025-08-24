@@ -138,6 +138,13 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), x
         },
     }
 
+    # helmholtz_schur_pc_params = {
+    #             # 'ksp_monitor': None,
+    #             'ksp_type': 'preonly',
+    #             'pc_type': 'lu',
+    #             'pc_factor_mat_solver_type': 'mumps',
+    #         }
+
     params_schur = {
         # 'mat_type': 'aij',
         'ksp_type': 'gmres',
@@ -161,7 +168,7 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), x
         },
         'fieldsplit_1': {
             'ksp_type': 'preonly',
-            # 'ksp_monitor': None,
+            'ksp_monitor': None,
             'pc_type': 'python',
             'pc_python_type': __name__ + '.HDivSchurPC',
             'helmholtzschurpc': helmholtz_schur_pc_params,
