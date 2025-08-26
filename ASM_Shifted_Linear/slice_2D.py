@@ -14,7 +14,7 @@ Omega = 7.292e-5
 theta = pi / 3
 omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 N=1.0e-2
-delta_pc = Constant(1.0e-2) # TODO: delta = 0.01 will work for simple algorithm.
+delta_pc = Constant(1.0e+2) # TODO: delta = 0.01 will work for simple algorithm.
 
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
@@ -26,8 +26,8 @@ class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
         w = wxz + wy * as_vector([0., 1., 0.])
         Jp = inner(velo, w) * dx
         Jp += dtc * inner(cross(omega, velo), w)*dx
-        Jp += dtc / delta_pc * div(velo) * div(w) * dx
-        Jp -= dtc/2 * inner(w, k) * b * dx
+        Jp += dtc / delta_pc / 2 * div(velo) * div(w) * dx
+        Jp -= dtc / 2 * inner(w, k) * b * dx
         Jp += b * q * dx
         Jp += dtc / 2 * N**2 * q * inner(k, velo) * dx
         # Boundary conditions
@@ -190,12 +190,12 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
 
     # Parameters
     # TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
-    # helmholtz_schur_pc_params = {
-    #             # 'ksp_monitor': None,
-    #             'ksp_type': 'preonly',
-    #             'pc_type': 'lu',
-    #             'pc_factor_mat_solver_type': 'mumps',
-    #         }
+    helmholtz_schur_pc_params = {
+                'ksp_monitor': None,
+                'ksp_type': 'preonly',
+                'pc_type': 'lu',
+                'pc_factor_mat_solver_type': 'mumps',
+            }
     # helmholtz_schur_pc_params = {
     #     'ksp_type': 'preonly',
     #     'ksp_max_its': 30,
@@ -207,9 +207,12 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     #         # 'ksp_type':'richardson',
     #         'ksp_type': 'chebyshev',
     #         # 'ksp_richardson_scale': 0.2,
-    #         'ksp_max_it': 1,
+    #         'ksp_max_it': 3,
     #         # 'ksp_monitor':None,
     #         "pc_type": "python",
+    #         # "pc_python_type": "firedrake.ASMVankaPC", # TODO: shall we use AssembledPC?
+    #         # "pc_vanka_construct_dim": 0,
+    #         # "pc_vanka_sub_sub_pc_type": "lu",
     #         "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
     #         "pc_star_construct_dim": 0,
     #         "pc_star_sub_sub_pc_type": "lu",
@@ -221,6 +224,44 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     #         'pc_type': 'lu',
     #     },
     # }
+
+    params = {
+        'mat_type': 'aij',
+        'ksp_type': 'fgmres',
+        # 'ksp_type': 'gmres',
+        'snes_type':'ksponly',
+        'ksp_atol': 0,
+        'ksp_rtol': 1e-6,
+        # 'ksp_view': None,
+        'snes_monitor': None,
+        # 'ksp_monitor': None,
+        'ksp_monitor_true_residual': None,
+        'pc_type': 'fieldsplit',
+        'pc_fieldsplit_type': 'schur',
+        'pc_fieldsplit_schur_fact_type': 'full',
+        'pc_fieldsplit_0_fields': '3',
+        'pc_fieldsplit_1_fields': '0,1,2',
+        'fieldsplit_0': { # Doing a pure mass solve for the pressure block.
+            'ksp_type': 'preonly',
+            'pc_type': 'bjacobi',
+            'sub_pc_type': 'ilu',
+            # 'pc_factor_mat_solver_type': 'mumps',
+        },
+        'fieldsplit_1': {
+            'ksp_type':'gmres',
+            # 'ksp_max_it':'1',
+            # 'ksp_type':'preonly',
+            'ksp_monitor': None,
+
+            # 'pc_type': 'lu',
+            # 'mat_type': 'aij',
+            # 'pc_factor_mat_solver_type': 'mumps'
+
+            'pc_type': 'python',
+            'pc_python_type': __name__ + '.HDivHelmholtzSchurPC',
+            'helmholtzschurpc': helmholtz_schur_pc_params,
+            },
+    }
 
     # params = {
     #         # 'mat_type': 'matfree',
@@ -254,7 +295,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     #             # 'pc_factor_mat_solver_type': 'mumps',
     #             }
     #         }
-    params = {'snes_type':'ksponly', 'ksp_type': 'gmres', 'snes_monitor':None, 'ksp_monitor':None, 'pc_type':'lu', ' mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'} # TODO: This is also working.
+    # params = {'snes_type':'ksponly', 'ksp_type': 'gmres', 'snes_monitor':None, 'ksp_monitor':None, 'pc_type':'lu', ' mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'} # TODO: This is also working.
 
     nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
     nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
@@ -271,7 +312,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     dtc.assign(dt)
     i = 0
     while t < tmax - 0.5 * dt:
-        print("The solver is currently solving for time", t)
+        print(f"=======================================The solver is currently solving for time:{t}==========================")
         t += dt
         tdump += dt
         i += 1
@@ -287,5 +328,5 @@ if __name__ == "__main__":
     length = 3.0e5
     # height = 3.0e5
     height = 1.0e4
-    solve_LB_Slice(nx=50, length=length, height=height, nlayers=20, delta=delta, dt=dt, tmax=2000., xtest=False, ztest=False, artest=False)
+    solve_LB_Slice(nx=50, length=length, height=height, nlayers=50, delta=delta, dt=dt, tmax=2000., xtest=False, ztest=False, artest=False)
     
