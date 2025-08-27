@@ -24,7 +24,7 @@ class HDivSchurPC(AuxiliaryOperatorPC):
         bcs = [bc1, bc2, bc3]
         return (Jp, bcs)
 
-def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), xtest=False, ztest=False, artest=False):
+def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, deltat=1.0, delta=Constant(1.0), xtest=False, ztest=False, artest=False, ttest=False):
     distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
     m = PeriodicIntervalMesh(nx, length,distribution_parameters=distribution_parameters)
     mh = MeshHierarchy(m, refinement_levels=2)
@@ -86,15 +86,15 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), x
     def u_eqn(u, p, b):
         return (
             inner(w, u) * dx -
-            div(w) * p * dx 
-            + inner(w, k) * b * dx 
+            deltat * div(w) * p * dx 
+            - deltat * inner(w, k) * b * dx 
             - inner(w, f) * dx
         )
 
     def b_eqn(u, p, b):
         return (
             q * b * dx 
-            + q * inner(k, u) * dx 
+            + deltat * q * inner(k, u) * dx 
             - g * q * dx
         )
 
@@ -168,7 +168,7 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), x
         },
         'fieldsplit_1': {
             'ksp_type': 'preonly',
-            'ksp_monitor': None,
+            # 'ksp_monitor': None,
             'pc_type': 'python',
             'pc_python_type': __name__ + '.HDivSchurPC',
             'helmholtzschurpc': helmholtz_schur_pc_params,
@@ -220,11 +220,14 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.0), x
     if ztest:
         # test for the different dz
         np.savetxt(f'err_dz_{delta_z}.out', error_list)
+    if ttest:
+        # test for the different dt
+        np.savetxt(f'err_dt_{deltat}.out', error_list)
 
 if __name__ == "__main__":
     nx=10
     length=1.0
     height=1e-3
     nlayers=20
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, artest=True)
+    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=4, artest=False)
     
