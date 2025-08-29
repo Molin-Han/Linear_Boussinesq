@@ -229,5 +229,7 @@ if __name__ == "__main__":
     length=1.0
     height=1e-3
     nlayers=20
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=4, artest=False)
+    deltat = 10
+    delta = deltat
+    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, artest=False)
     

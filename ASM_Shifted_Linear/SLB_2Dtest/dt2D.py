@@ -7,7 +7,7 @@ from petsc4py import PETSc
 
 print = PETSc.Sys.Print
 
-t_array = np.arange(1, 100, 10)
+t_array = np.arange(1, 30, 4)
 nx = 100
 height = pi / 2000
 nlayers = 100
@@ -19,12 +19,13 @@ dt_list = []
 for i in t_array:
     print(i)
     deltat = i
+    delta = deltat
     dx = 1 / nx
     ar = height / length
     print(f"Aspect ratio is {ar}")
     print(f"The dt is {deltat}")
     dt_list.append(deltat)
-    solve_SLB(nx=nx, length=length, height=height,deltat=deltat, nlayers=nlayers, ttest=True)
+    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, ttest=True)
 
 
 j = 0

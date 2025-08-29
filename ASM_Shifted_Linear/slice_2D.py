@@ -7,14 +7,14 @@ print = PETSc.Sys.Print
 
 
 # TODO: How to make it a intrinsic variable:
-dt_pc = 100.
+dt_pc = 2.
 dtc = Constant(dt_pc)
 k = as_vector([0., 0., 1.])
 Omega = 7.292e-5
 theta = pi / 3
 omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 N=1.0e-2
-delta_pc = Constant(1.0e+2) # TODO: delta = 0.01 will work for simple algorithm.
+delta_pc = Constant(dt_pc/2) # TODO: delta = 0.01 will work for simple algorithm.
 
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
@@ -25,7 +25,7 @@ class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
         velo = uxz + uy * as_vector([0., 1., 0.])
         w = wxz + wy * as_vector([0., 1., 0.])
         Jp = inner(velo, w) * dx
-        Jp += dtc * inner(cross(omega, velo), w)*dx
+        # Jp += dtc * inner(cross(omega, velo), w)*dx
         Jp += dtc / delta_pc / 2 * div(velo) * div(w) * dx
         Jp -= dtc / 2 * inner(w, k) * b * dx
         Jp += b * q * dx
@@ -155,7 +155,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     def u_eqn(un, unp1, unph, pnp1, bnph):
         return (
             inner(w, (unp1 - un)) * dx 
-            + dtc * inner(w, 2 * cross(omega, unph)) * dx
+            # + dtc * inner(w, 2 * cross(omega, unph)) * dx
             - dtc * div(w) * pnp1 * dx
             - dtc * inner(w, k) * bnph * dx
             # - dtc / 2 * inner(w, k) * bnp1 * dx # TODO: check Schur complement
@@ -191,10 +191,13 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     # Parameters
     # TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
     helmholtz_schur_pc_params = {
-                'ksp_monitor': None,
-                'ksp_type': 'preonly',
-                'pc_type': 'lu',
-                'pc_factor_mat_solver_type': 'mumps',
+                # 'ksp_monitor': None,
+                'pc_type':'ksp',
+                'ksp_ksp_type': 'gmres',
+                # 'ksp_converged_reason': None,
+                'ksp_ksp_monitor': None,
+                'ksp_pc_type': 'lu',
+                'ksp_pc_factor_mat_solver_type': 'mumps',
             }
     # helmholtz_schur_pc_params = {
     #     'ksp_type': 'preonly',
@@ -227,11 +230,11 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
 
     params = {
         'mat_type': 'aij',
-        'ksp_type': 'fgmres',
-        # 'ksp_type': 'gmres',
+        # 'ksp_type': 'fgmres',
+        'ksp_type': 'gmres',
         'snes_type':'ksponly',
         'ksp_atol': 0,
-        'ksp_rtol': 1e-6,
+        'ksp_rtol': 1e-9,
         # 'ksp_view': None,
         'snes_monitor': None,
         # 'ksp_monitor': None,
@@ -248,10 +251,10 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
             # 'pc_factor_mat_solver_type': 'mumps',
         },
         'fieldsplit_1': {
-            'ksp_type':'gmres',
+            # 'ksp_type':'gmres',
             # 'ksp_max_it':'1',
-            # 'ksp_type':'preonly',
-            'ksp_monitor': None,
+            'ksp_type':'preonly',
+            # 'ksp_monitor': None,
 
             # 'pc_type': 'lu',
             # 'mat_type': 'aij',
