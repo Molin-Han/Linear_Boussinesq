@@ -281,14 +281,14 @@ if __name__ == "__main__":
     N=1.0e-2
     U=0.
     dt=100.0
-    tmax = 150.0
-    nx=6
-    ny=6
+    tmax = 1000.0
+    nx=20
+    ny=1
     Lx=3.0e5
-    # Ly=1.0e-3 * Lx
-    Ly=Lx
+    Ly=1.0e-3 * Lx
+    # Ly=Lx
     height=1e4
-    nlayers=10
+    nlayers=20
 
     eqn = Boussinesq(N=N, U=U, dt=dt, nx=nx, ny=ny, Lx=Lx, Ly=Ly, height=height, nlayers=nlayers)
     eqn.build_initial_data()
