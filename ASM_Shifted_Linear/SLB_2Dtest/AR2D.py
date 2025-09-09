@@ -7,11 +7,11 @@ from petsc4py import PETSc
 
 print = PETSc.Sys.Print
 
-rate = 8000
-height_array = np.exp(np.arange(7, -3, -2.0)) * pi / rate
+rate = 20000
+height_array = np.exp(np.arange(7, -3, -1.0)) * pi / rate
 
-nx = 100
-nlayers = 200
+nx = 50
+nlayers = 50
 length = 1.0
 fig, ax = plt.subplots()
 ax.set_title(f"The solution error with different AR.")
@@ -35,4 +35,4 @@ for ratio in ar_list:
     plt.xlabel("its")
     plt.ylabel("log_error")
     #plt.savefig(f"error_final{ratio}.png")
-plt.savefig(f"ar_{ratio}.png")
+plt.savefig(f"3ar_{ratio}.png")

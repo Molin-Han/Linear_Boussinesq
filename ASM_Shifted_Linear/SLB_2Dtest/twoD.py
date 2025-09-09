@@ -28,7 +28,8 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, deltat=1.0, delta=Cons
     distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
     m = PeriodicIntervalMesh(nx, length,distribution_parameters=distribution_parameters)
     mh = MeshHierarchy(m, refinement_levels=2)
-    hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+    # hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+    hierarchy = ExtrudedMeshHierarchy(mh, height, layers=[1, nlayers], extrusion_type='uniform')
     mesh = hierarchy[-1]
     finest_mesh_name = "finest"
     mesh.name = finest_mesh_name
@@ -131,6 +132,12 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, deltat=1.0, delta=Cons
             "pc_star_sub_sub_pc_type": "lu",
             # "pc_star_sub_sub_pc_type": "svd",
             # "pc_star_sub_sub_pc_svd_monitor": None,
+
+            # "pc_python_type": "firedrake.ASMVankaPC",
+            # "pc_vanka_construct_dim": 0,
+            # # "pc_vanka_sub_sub_pc_type": "lu",
+            # "pc_vanka_sub_sub_pc_type": "svd",
+            # "pc_vanka_sub_sub_pc_svd_monitor": None,
         },
         'mg_coarse': {
             'ksp_type': 'preonly',
@@ -225,11 +232,11 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, deltat=1.0, delta=Cons
         np.savetxt(f'err_dt_{deltat}.out', error_list)
 
 if __name__ == "__main__":
-    nx=10
+    nx=50
     length=1.0
     height=1e-3
-    nlayers=20
-    deltat = 10
+    nlayers=50
+    deltat = 1.0
     delta = deltat
     solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, artest=False)
     
