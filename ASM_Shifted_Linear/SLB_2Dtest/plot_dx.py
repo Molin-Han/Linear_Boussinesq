@@ -23,19 +23,19 @@ for i in nx_array:
     print(f"Aspect ratio is {ar}")
     print(f"The dx is {dx}")
     dx_list.append(dx)
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, xtest=True)
+    # solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, xtest=True)
 
 
-# j = 0
-# for dx in dx_list:
-#     horiz = nx_array[j]
-#     j += 1
-#     error = np.loadtxt(f'err_dx_{dx}.out')
-#     x = np.arange(len(error))
-#     ax.semilogy(x, error, label=f"nx={horiz}")
-#     plt.legend()
-#     plt.xlabel("its")
-#     plt.ylabel("log_error")
-#     #plt.savefig(f"error_final{dx}.png")
+j = 0
+for dx in dx_list:
+    horiz = nx_array[j]
+    j += 1
+    error = np.loadtxt(f'err_dx_{dx}.out')
+    x = np.arange(len(error))
+    ax.semilogy(x, error, label=f"nx={horiz}")
+    plt.legend()
+    plt.xlabel("its")
+    plt.ylabel("log_error")
+    #plt.savefig(f"error_final{dx}.png")
 
-# plt.savefig(f"dx_{dx}.png")
+plt.savefig(f"dx_{dx}.png")

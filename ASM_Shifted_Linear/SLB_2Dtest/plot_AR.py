@@ -24,16 +24,16 @@ for i in height_array:
     ar = height / length
     print(f"Aspect ratio is {ar}")
     ar_list.append(ar)
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, artest=True)
+    # solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, artest=True)
 
-# j = 0
-# for ratio in ar_list:
-#     error = np.loadtxt(f'err_ar_{ratio}.out')
-#     x = np.arange(len(error))
-#     ax.semilogy(x, error, label=f"ar={round(ratio, 7)}")
-#     j+=1
-#     plt.legend()
-#     plt.xlabel("its")
-#     plt.ylabel("log_error")
-#     #plt.savefig(f"error_final{ratio}.png")
-# plt.savefig(f"2ar_{ratio}.png")
+j = 0
+for ratio in ar_list:
+    error = np.loadtxt(f'err_ar_{ratio}.out')
+    x = np.arange(len(error))
+    ax.semilogy(x, error, label=f"ar={round(ratio, 7)}")
+    j+=1
+    plt.legend()
+    plt.xlabel("its")
+    plt.ylabel("log_error")
+    #plt.savefig(f"error_final{ratio}.png")
+plt.savefig(f"ar_{ratio}.png")

@@ -7,7 +7,7 @@ print = PETSc.Sys.Print
 
 
 # TODO: How to make it a intrinsic variable:
-dt_pc = 2.
+dt_pc = 100.0
 dtc = Constant(dt_pc)
 k = as_vector([0., 0., 1.])
 Omega = 7.292e-5
@@ -15,6 +15,7 @@ theta = pi / 3
 omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 N=1.0e-2
 delta_pc = Constant(dt_pc/2) # TODO: delta = 0.01 will work for simple algorithm.
+# delta_pc = Constant(1e-5)
 
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
@@ -46,7 +47,8 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     distribution_parameters = {"partition": True, "overlap_type": (DistributedMeshOverlapType.VERTEX, 2)}
     m = PeriodicIntervalMesh(nx, length,distribution_parameters=distribution_parameters)
     mh = MeshHierarchy(m, refinement_levels=2)
-    hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+    # hierarchy = ExtrudedMeshHierarchy(mh, height, base_layer=nlayers,refinement_ratio=1, extrusion_type='uniform')
+    hierarchy = ExtrudedMeshHierarchy(mh, height, layers=[1, nlayers], extrusion_type='uniform')
     mesh_old = hierarchy[-1]
     meshes = []
     for m in hierarchy:
@@ -109,6 +111,8 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     bc5 = DirichletBC(W.sub(1), 0., "bottom")
     bc6 = DirichletBC(W.sub(1), 0., "on_boundary")
     bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
+    # bc_pressure = DirichletBC(W.sub(3), Constant(0.0), "top")
+    # bcs.append(bc_pressure)
     # bc4 = DirichletBC(W.sub(2), 0., "top")
     # bc5 = DirichletBC(W.sub(2), 0., "bottom")
     # bcs = [bc1, bc2, bc4, bc5]
@@ -132,13 +136,13 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     # bnp1ic.project( N**2 * z)
     # pnic.project(0.5 * N**2 * z**2)
     # pnp1ic.project(0.5 * N**2 * z**2)
-    DG0 = FunctionSpace(mesh, 'DG', 0)
-    One = Function(DG0).assign(1.0)
-    area = assemble(One * dx)
-    pnic_int = assemble(pn * dx)
-    pnic.project(pn - pnic_int / area)
-    pnp1ic_int = assemble(pnp1 * dx)
-    pnp1ic.project(pnp1ic - pnp1ic_int/area)
+    # DG0 = FunctionSpace(mesh, 'DG', 0)
+    # One = Function(DG0).assign(1.0)
+    # area = assemble(One * dx)
+    # pnic_int = assemble(pn * dx)
+    # pnic.project(pn - pnic_int / area)
+    # pnp1ic_int = assemble(pnp1 * dx)
+    # pnp1ic.project(pnp1ic - pnp1ic_int/area)
 
     print('==================================================')
     print('Initial condition has been interpolated')
@@ -165,7 +169,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
         return (
             q * (bnp1 - bn) * dx
             + dtc * N**2 * q * inner(k, unph) * dx
-            + dtc / 2 * N**2 * q * inner(k, unp1) * dx
+            # + dtc / 2 * N**2 * q * inner(k, unp1) * dx
         )
 
     def p_eqn(unp1):
@@ -191,13 +195,15 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     # Parameters
     # TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
     helmholtz_schur_pc_params = {
+                # 'pc_type':'preonly',
+                # 'pc_type': 'lu',
+                # 'pc_factor_mat_solver_type': 'mumps',
                 # 'ksp_monitor': None,
                 'pc_type':'ksp',
                 'ksp_ksp_type': 'gmres',
                 # 'ksp_converged_reason': None,
-                'ksp_ksp_monitor': None,
-                'ksp_pc_type': 'lu',
-                'ksp_pc_factor_mat_solver_type': 'mumps',
+                # 'ksp_ksp_monitor': None,
+                # 'ksp_pc_type': 'lu',
             }
     # helmholtz_schur_pc_params = {
     #     'ksp_type': 'preonly',
@@ -205,7 +211,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     #     'pc_type': 'mg',
     #     'pc_mg_type': 'full',
     #     'pc_mg_cycle_type':'v',
-    #     'mg_levels': {
+    #     'mg_levels': { 
     #         # 'ksp_type': 'gmres',
     #         # 'ksp_type':'richardson',
     #         'ksp_type': 'chebyshev',
@@ -246,15 +252,18 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
         'pc_fieldsplit_1_fields': '0,1,2',
         'fieldsplit_0': { # Doing a pure mass solve for the pressure block.
             'ksp_type': 'preonly',
+            # 'pc_type': 'lu',
+            # 'pc_factor_mat_solver_type': 'mumps',
             'pc_type': 'bjacobi',
             'sub_pc_type': 'ilu',
             # 'pc_factor_mat_solver_type': 'mumps',
         },
         'fieldsplit_1': {
             # 'ksp_type':'gmres',
-            # 'ksp_max_it':'1',
-            'ksp_type':'preonly',
-            # 'ksp_monitor': None,
+            # 'ksp_max_it':'30',
+            'ksp_type':'preonl'
+            'y', #TODO: This will cause the first KSP residual increase!!!! using gmres will be fine ???
+            'ksp_monitor': None,
 
             # 'pc_type': 'lu',
             # 'mat_type': 'aij',
@@ -266,38 +275,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
             },
     }
 
-    # params = {
-    #         # 'mat_type': 'matfree',
-    #         'snes_type':'ksponly', # TODO: do this for prettier plots of error.
-    #         'ksp_type': 'gmres',
-    #         'snes_monitor': None,
-    #         'ksp_atol': 0,
-    #         'ksp_rtol': 1e-10,
-    #         # 'ksp_monitor': None,
-    #         "ksp_monitor_true_residual": None,
-    #         'pc_type': 'mg',
-    #         'pc_mg_type': 'full',
-    #         'pc_mg_cycle_type':'v',
-    #         # "ksp_converged_reason": None,
-    #         # "snes_converged_reason": None,
-    #         'mg_levels': {
-    #             'ksp_type': 'richardson',
-    #             'ksp_richardson_scale': 0.2,
-    #             # "ksp_monitor_true_residual": None,
-    #             # "ksp_view": None,
-    #             'ksp_max_it': 5,
-    #             "pc_type": "python",
-    #             "pc_python_type": "firedrake.ASMVankaPC", # TODO: shall we use AssembledPC?
-    #             "pc_vanka_construct_dim": 0,
-    #             "pc_vanka_sub_sub_pc_type": "lu",
-    #             },
-    #         'mg_coarse': {
-    #             'ksp_type': 'preonly',
-    #             'pc_type': 'lu',
-    #             # 'mat_type':'aij',
-    #             # 'pc_factor_mat_solver_type': 'mumps',
-    #             }
-    #         }
     # params = {'snes_type':'ksponly', 'ksp_type': 'gmres', 'snes_monitor':None, 'ksp_monitor':None, 'pc_type':'lu', ' mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'} # TODO: This is also working.
 
     nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
@@ -330,6 +307,6 @@ if __name__ == "__main__":
     dt = dt_pc
     length = 3.0e5
     # height = 3.0e5
-    height = 1.0e4
-    solve_LB_Slice(nx=50, length=length, height=height, nlayers=50, delta=delta, dt=dt, tmax=2000., xtest=False, ztest=False, artest=False)
+    height = 1.0e2
+    solve_LB_Slice(nx=50, length=length, height=height, nlayers=50, delta=delta, dt=dt, tmax=300.0, xtest=False, ztest=False, artest=False)
     

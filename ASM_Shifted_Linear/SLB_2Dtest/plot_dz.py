@@ -12,8 +12,6 @@ nx = 100
 length = 1.0
 nlayers_array = np.exp(np.arange(2, 8)* 2/5) * 10
 nlayers_array = nlayers_array.astype(int)
-# nlayers_array = np.array([245])
-print(nlayers_array)
 
 fig, ax = plt.subplots()
 ax.set_title("The solution error for different nz")
@@ -27,17 +25,17 @@ for i in nlayers_array:
     print(f"Aspect ratio is {ar}")
     print(f"The dz is {dz}")
     dz_list.append(dz)
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, ztest=True)
+    # solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, ztest=True)
 
-# j = 0
-# for dz in dz_list:
-#     nlayer = nlayers_array[j]
-#     j += 1
-#     error = np.loadtxt(f'err_dz_{dz}.out')
-#     x = np.arange(len(error))
-#     ax.semilogy(x, error, label=f"nz={nlayer}")
-#     plt.legend()
-#     plt.xlabel("its")
-#     plt.ylabel("log_error")
-#     #plt.savefig(f"error_final{dz}.png")
-# plt.savefig(f"dz_{dz}.png")
+j = 0
+for dz in dz_list:
+    nlayer = nlayers_array[j]
+    j += 1
+    error = np.loadtxt(f'err_dz_{dz}.out')
+    x = np.arange(len(error))
+    ax.semilogy(x, error, label=f"nz={nlayer}")
+    plt.legend()
+    plt.xlabel("its")
+    plt.ylabel("log_error")
+    #plt.savefig(f"error_final{dz}.png")
+plt.savefig(f"dz_{dz}.png")

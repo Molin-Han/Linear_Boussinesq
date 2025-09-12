@@ -8,9 +8,8 @@ from petsc4py import PETSc
 print = PETSc.Sys.Print
 
 t_array = np.arange(1, 25, 4)
-# t_array = np.array([11])
 nx = 100
-height = 1/1000
+height = pi / 2000
 nlayers = 100
 length = 1.0
 fig, ax = plt.subplots()
@@ -26,19 +25,19 @@ for i in t_array:
     print(f"Aspect ratio is {ar}")
     print(f"The dt is {deltat}")
     dt_list.append(deltat)
-    solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, ttest=True)
+    # solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, ttest=True)
 
 
-# j = 0
-# for dt in dt_list:
-#     delt = t_array[j]
-#     j += 1
-#     error = np.loadtxt(f'err_dt_{delt}.out')
-#     x = np.arange(len(error))
-#     ax.semilogy(x, error, label=f"$\Delta t$={delt}")
-#     plt.legend()
-#     plt.xlabel("its")
-#     plt.ylabel("log_error")
-#     #plt.savefig(f"error_final{dx}.png")
+j = 0
+for dt in dt_list:
+    delt = t_array[j]
+    j += 1
+    error = np.loadtxt(f'err_dt_{delt}.out')
+    x = np.arange(len(error))
+    ax.semilogy(x, error, label=f"$\Delta t$={delt}")
+    plt.legend()
+    plt.xlabel("its")
+    plt.ylabel("log_error")
+    #plt.savefig(f"error_final{dx}.png")
 
-# plt.savefig(f"dt_{deltat}.png")
+plt.savefig(f"dt_{deltat}.png")
