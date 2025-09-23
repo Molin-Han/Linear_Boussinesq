@@ -91,14 +91,14 @@ def solve_SLB(nx=10, length=1.0, height=1e-3, nlayers=20, deltat=1.0, delta=Cons
             inner(w, u) * dx -
             deltat * div(w) * p * dx 
             - deltat * inner(w, k) * b * dx 
-            - inner(w, f) * dx
+            - deltat * inner(w, f) * dx
         )
 
     def b_eqn(u, p, b):
         return (
             q * b * dx 
             + deltat * q * inner(k, u) * dx 
-            - g * q * dx
+            - deltat * g * q * dx
         )
 
     def p_eqn(u, p, b):
