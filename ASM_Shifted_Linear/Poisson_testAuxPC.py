@@ -17,6 +17,15 @@ N=1.0e-2
 # delta_pc = Constant(dt_pc/2) # TODO: delta = 0.01 will work for simple algorithm.
 delta_pc = Constant(1e-5) # TODO: choice of the delta needs to be tuned.
 
+class ShiftPC(AuxiliaryOperatorPC):
+    _prefix = "shiftpc_"
+    def form(self, pc, u, v):
+        W = u.function_space()
+        uxz, uy, p = split(u)
+        wxz, wy, q = split(v)
+        velo = uxz + uy * as_vector([0., 1., 0.])
+        w = wxz + wy * as_vector([0., 1., 0.])
+
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
     def form(self, pc, u, v):
@@ -138,10 +147,10 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     # TODO: Suggestion: divide into tendency term and the rest.
 
     # Equations
-    def u_eqn(un, unp1, pnph):
+    def u_eqn(un, unp1, pnp1):
         return (
             inner(w, (unp1 - un)) * dx 
-            - dtc * div(w) * pnph * dx
+            - dtc * div(w) * pnp1 * dx
             - inner(f, w) * dx
         )
 
@@ -156,7 +165,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     pnph = 0.5 * (pn+pnp1)
     w = w_slice + wy * as_vector([0., 1., 0.])
     eqn = p_eqn(unp1)
-    eqn += u_eqn(un, unp1, pnph) #+ (unp1y - uny) * wy * dx # Modification to separate the y equation here.
+    eqn += u_eqn(un, unp1, pnp1) #+ (unp1y - uny) * wy * dx # Modification to separate the y equation here.
     shift = eqn + delta * pnp1 * phi * dx
     Jp = derivative(shift, Unp1)
 

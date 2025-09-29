@@ -7,15 +7,15 @@ print = PETSc.Sys.Print
 
 
 # TODO: How to make it a intrinsic variable:
-dt_pc = 0.1
+dt_pc = 10
 dtc = Constant(dt_pc)
 k = as_vector([0., 0., 1.])
 Omega = 7.292e-5
 theta = pi / 3
 omega = as_vector([0, Omega * sin(theta), Omega * cos(theta)])
 N=1.0e-2
-delta_pc = Constant(dt_pc/2) # TODO: delta = 0.01 will work for simple algorithm.
-# delta_pc = Constant(1e-5)
+# delta_pc = Constant(dt_pc/2) # TODO: delta = 0.01 will work for simple algorithm.
+delta_pc = Constant(1e-5)
 
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
@@ -26,7 +26,7 @@ class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
         velo = uxz + uy * as_vector([0., 1., 0.])
         w = wxz + wy * as_vector([0., 1., 0.])
         Jp = inner(velo, w) * dx
-        # Jp += dtc * inner(cross(omega, velo), w)*dx
+        Jp += dtc * inner(cross(omega, velo), w)*dx
         Jp += dtc / delta_pc / 2 * div(velo) * div(w) * dx
         Jp -= dtc / 2 * inner(w, k) * b * dx
         Jp += b * q * dx
@@ -64,7 +64,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
                             mh.fine_to_coarse_cells,
                             mh.refinements_per_level, mh.nested)
     mesh = new_mh[-1] # Creating a new mesh.
-    # mesh.init_cell_orientations(as_vector([0,1,0]))
     x, y, z = SpatialCoordinate(mesh) # Create a new mesh coordinate.
     finest_mesh_name = "finest"
     mesh.name = finest_mesh_name
@@ -112,12 +111,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     bc5 = DirichletBC(W.sub(1), 0., "bottom")
     bc6 = DirichletBC(W.sub(1), 0., "on_boundary")
     bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
-    # bc_pressure = DirichletBC(W.sub(3), Constant(0.0), "top")
-    # bcs.append(bc_pressure)
-    # bc4 = DirichletBC(W.sub(2), 0., "top")
-    # bc5 = DirichletBC(W.sub(2), 0., "bottom")
-    # bcs = [bc1, bc2, bc4, bc5]
-    # bcs = [bc1, bc2]
 
     # Initial condition
     xc = Constant(length/2)
@@ -131,19 +124,8 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     unp1ic_slice.project(as_vector([Constant(0.0),Constant(0.0),Constant(0.0)]))
     unyic.project(Constant(0.))
     unp1yic.project(Constant(0.))
-    bnic.project(sin(pi*z/height)/(1+((x-xc)**2)/a**2)) # TODO: removed N**2 z, only the perturbation of the temperature is involved.
+    bnic.project(sin(pi*z/height)/(1+((x-xc)**2)/a**2))
     bnp1ic.project(sin(pi*z/height)/(1+((x-xc)**2)/a**2))
-    # bnic.project( N**2 * z)
-    # bnp1ic.project( N**2 * z)
-    # pnic.project(0.5 * N**2 * z**2)
-    # pnp1ic.project(0.5 * N**2 * z**2)
-    # DG0 = FunctionSpace(mesh, 'DG', 0)
-    # One = Function(DG0).assign(1.0)
-    # area = assemble(One * dx)
-    # pnic_int = assemble(pn * dx)
-    # pnic.project(pn - pnic_int / area)
-    # pnp1ic_int = assemble(pnp1 * dx)
-    # pnp1ic.project(pnp1ic - pnp1ic_int/area)
 
     print('==================================================')
     print('Initial condition has been interpolated')
@@ -157,20 +139,18 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     # TODO: Suggestion: divide into tendency term and the rest.
 
     # Equations
-    def u_eqn(un, unp1, unph, pnp1, bnph): # TODO: if this should be pnph
+    def u_eqn(un, unp1, unph, pnph, bnph): # TODO: if this should be pnph
         return (
             inner(w, (unp1 - un)) * dx 
-            # + dtc * inner(w, 2 * cross(omega, unph)) * dx
-            - dtc * div(w) * pnp1 * dx
+            + dtc * inner(w, 2 * cross(omega, unph)) * dx
+            - dtc * div(w) * pnph * dx # TODO: this should be pressure averaged!!?
             - dtc * inner(w, k) * bnph * dx
-            # - dtc / 2 * inner(w, k) * bnp1 * dx # TODO: check Schur complement
         )
 
     def b_eqn(bn, bnp1, unph, unp1):
         return (
             q * (bnp1 - bn) * dx
             + dtc * N**2 * q * inner(k, unph) * dx
-            # + dtc / 2 * N**2 * q * inner(k, unp1) * dx
         )
 
     def p_eqn(unp1):
@@ -186,7 +166,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     w = w_slice + wy * as_vector([0., 1., 0.])
     eqn = p_eqn(unp1)
     eqn += b_eqn(bn, bnp1, unph, unp1)
-    eqn += u_eqn(un, unp1, unph, pnp1, bnph) #+ (unp1y - uny) * wy * dx # Modification to separate the y equation here.
+    eqn += u_eqn(un, unp1, unph, pnph, bnph) #+ (unp1y - uny) * wy * dx # Modification to separate the y equation here.
     shift = eqn + delta * pnp1 * phi * dx
     Jp = derivative(shift, Unp1)
 
@@ -194,7 +174,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     nullspace = MixedVectorSpaceBasis(W, [W.sub(0), W.sub(1), W.sub(2), v_basis])
 
     # Parameters
-    # TODO: Check if the Schur Complement is correct. The direct solve should converge in one iteration.
     helmholtz_schur_pc_params = {
                 'ksp_type':'preonly',
                 'pc_type': 'lu',
@@ -213,16 +192,17 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     #     'pc_mg_cycle_type':'v',
     #     'mg_levels': { 
     #         # 'ksp_type': 'gmres',
-    #         # 'ksp_type':'richardson',
-    #         'ksp_type': 'chebyshev',
-    #         # 'ksp_richardson_scale': 0.2,
+    #         'ksp_type':'richardson',
+    #         # 'ksp_type': 'chebyshev',
+    #         'ksp_richardson_scale': 0.25,
     #         'ksp_max_it': 3,
     #         # 'ksp_monitor':None,
+    #         # 'ksp_monitor_true_residual': None,
     #         "pc_type": "python",
-    #         # "pc_python_type": "firedrake.ASMVankaPC", # TODO: shall we use AssembledPC?
+    #         # "pc_python_type": "firedrake.ASMVankaPC",
     #         # "pc_vanka_construct_dim": 0,
     #         # "pc_vanka_sub_sub_pc_type": "lu",
-    #         "pc_python_type": "firedrake.ASMStarPC", # TODO: shall we use AssembledPC?
+    #         "pc_python_type": "firedrake.ASMStarPC",
     #         "pc_star_construct_dim": 0,
     #         "pc_star_sub_sub_pc_type": "lu",
     #         # "pc_star_sub_sub_pc_type": "svd",
@@ -263,10 +243,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
             # 'ksp_max_it':'30',
             'ksp_type':'preonly', #TODO: This will cause the first KSP residual increase!!!! using gmres will be fine ???
             'ksp_monitor': None,
-
-            # 'pc_type': 'lu',
-            # 'mat_type': 'aij',
-            # 'pc_factor_mat_solver_type': 'mumps'
 
             'pc_type': 'python',
             'pc_python_type': __name__ + '.HDivHelmholtzSchurPC',
