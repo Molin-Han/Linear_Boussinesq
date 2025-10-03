@@ -25,6 +25,16 @@ class ShiftPC(AuxiliaryOperatorPC):
         wxz, wy, q = split(v)
         velo = uxz + uy * as_vector([0., 1., 0.])
         w = wxz + wy * as_vector([0., 1., 0.])
+        Jp = inner(w, velo) * dx 
+        Jp -= dtc / 2 * div(w) * p * dx
+        Jp += q * div(velo) * dx
+        Jp += delta * p * q * dx
+        # Boundary conditions
+        bc1 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "top")
+        bc2 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "bottom")
+        bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
+        bcs = [bc1, bc2, bc3]
+        return (Jp, bcs)
 
 class HDivHelmholtzSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
@@ -111,10 +121,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     bc1 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "top")
     bc2 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "bottom")
     bc3 = DirichletBC(W.sub(0), as_vector([0., 0., 0.]), "on_boundary")
-    bc4 = DirichletBC(W.sub(1), 0., "top")
-    bc5 = DirichletBC(W.sub(1), 0., "bottom")
-    bc6 = DirichletBC(W.sub(1), 0., "on_boundary")
-    bcs = [bc1, bc2, bc3, bc4, bc5, bc6]
+    bcs = [bc1, bc2, bc3]
 
     # Initial condition
     xc = Constant(length/2)
@@ -166,8 +173,6 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     w = w_slice + wy * as_vector([0., 1., 0.])
     eqn = p_eqn(unp1)
     eqn += u_eqn(un, unp1, pnp1) #+ (unp1y - uny) * wy * dx # Modification to separate the y equation here.
-    shift = eqn + delta * pnp1 * phi * dx
-    Jp = derivative(shift, Unp1)
 
     v_basis = VectorSpaceBasis(constant=True, comm=COMM_WORLD)
     nullspace = MixedVectorSpaceBasis(W, [W.sub(0), W.sub(1), v_basis])
@@ -187,6 +192,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
     helmholtz_schur_pc_params = {
         'ksp_type': 'preonly',
         'ksp_max_its': 30,
+        'ksp_monitor_true_residual': None,
         'pc_type': 'mg',
         'pc_mg_type': 'full',
         'pc_mg_cycle_type':'v',
@@ -213,17 +219,7 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
         },
     }
 
-    params = {
-        'mat_type': 'aij',
-        # 'ksp_type': 'fgmres',
-        'ksp_type': 'gmres',
-        'snes_type':'ksponly',
-        'ksp_atol': 0,
-        'ksp_rtol': 1e-9,
-        # 'ksp_view': None,
-        'snes_monitor': None,
-        # 'ksp_monitor': None,
-        'ksp_monitor_true_residual': None,
+    shift_params = {
         'pc_type': 'fieldsplit',
         'pc_fieldsplit_type': 'schur',
         'pc_fieldsplit_schur_fact_type': 'full',
@@ -252,13 +248,29 @@ def solve_LB_Slice(nx=10, length=1.0, height=1e-3, nlayers=20, delta=Constant(1.
             },
     }
 
+    params = {
+        'mat_type': 'aij',
+        # 'ksp_type': 'fgmres',
+        'ksp_type': 'gmres',
+        'snes_type':'ksponly',
+        'ksp_atol': 0,
+        'ksp_rtol': 1e-9,
+        'ksp_view': ':kspviewoutput.txt',
+        'snes_monitor': None,
+        # 'ksp_monitor': None,
+        'ksp_monitor_true_residual': None,
+        'pc_type':'python',
+        'pc_python_type': __name__ + '.ShiftPC',
+        'shiftpc': shift_params
+    }
+
     # params = {'snes_type':'ksponly', 'ksp_type': 'gmres', 'snes_monitor':None, 'ksp_monitor':None, 'pc_type':'lu', ' mat_type': 'aij', 'pc_factor_mat_solver_type': 'mumps'} # TODO: This is also working.
 
-    nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs, Jp=Jp)
+    nprob = NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
     nsolver = NonlinearVariationalSolver(nprob, nullspace=nullspace, solver_parameters=params)
 
     # Time Stepping
-    name = 'lb_slice_imp_ASM'
+    name = 'Poisson_imp_ASM'
     file_lb = VTKFile(name+'.pvd')
     un, uny, pn = Un.subfunctions
     file_lb.write(un, uny, pn)

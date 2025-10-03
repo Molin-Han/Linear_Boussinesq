@@ -5,8 +5,6 @@ from matplotlib import pyplot as plt
 from petsc4py import PETSc
 
 print = PETSc.Sys.Print
-
-
 class HDivSchurPC(AuxiliaryOperatorPC):
     _prefix = "helmholtzschurpc_"
     def form(self, pc, u, v):
@@ -15,7 +13,7 @@ class HDivSchurPC(AuxiliaryOperatorPC):
         velo, b = split(u)
         w, q = split(v)
         Jp = (inner(velo, w) + 1 / Constant(1.0) * div(velo) * div(w))*dx # TODO: The delta shifting parameter enters here.
-        Jp += inner(w, k) * b * dx
+        Jp -= inner(w, k) * b * dx
         Jp += q * b *dx + q * inner(k, velo) * dx
         #  Boundary conditions
         bc1 = DirichletBC(W.sub(0), as_vector([0., 0.]), "top")
@@ -237,7 +235,7 @@ if __name__ == "__main__":
     nx=40
     length=1.0
     height=1e-3
-    nlayers=1000
+    nlayers=20
     deltat = 1.0
     delta = deltat
     solve_SLB(nx=nx, length=length, height=height, nlayers=nlayers, deltat=deltat, delta=delta, artest=False)

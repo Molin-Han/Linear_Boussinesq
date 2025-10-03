@@ -175,3 +175,4 @@ cython_debug/
 *.png
 *.pvtu
 *.h5
+*.txt
